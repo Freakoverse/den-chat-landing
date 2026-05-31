@@ -1,0 +1,636 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DEN Chat - Free your chat</title>
+  <meta name="description"
+    content="Decentralized, encrypted chat built on Nostr. No censorship, no KYC, one identity everywhere.">
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 980 980'%3E%3Cpath fill='%23fff' fill-rule='evenodd' d='m907.73 888.19c-14.57 30.37-89.83 51.72-189.76 64.06 5.85-16.56 10.77-34.19 14.66-52.85l-110.69-249.99-44.5 49.32-87.19-156.39-87.19 156.39-44.5-49.32-110.94 250.31c3.89 18.59 8.8 36.14 14.63 52.64-100.38-12.32-176.05-33.71-190.67-64.17-24.45-50.96-43.84-108.37-57.13-171.91l217.42-490.57 65.58 75.02 192.52-284.86 192.52 284.86 65.57-75.02 216.94 489.95c-13.3 63.79-32.74 121.41-57.27 172.53z'/%3E%3Cpath fill='%233e67ff' fill-rule='evenodd' d='M337.68 923.93L407.42 766.58 435.44 797.63 490.2 699.27 544.97 797.63 572.99 766.58 642.57 923.73C640.12 935.46 637.03 946.54 633.36 956.95 547.55 967.54 432.81 967.57 346.88 957.02 343.21 946.65 340.12 935.61 337.68 923.93Z'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] },
+          colors: {
+            den: {
+              bg: '#171717',
+              surface: '#0f0f0f',
+              fg: '#fafafa',
+              primary: '#4B6BFF',
+              'primary-hover': '#6983FF',
+              muted: '#262626',
+              'muted-fg': '#a1a1aa',
+              border: '#262626',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <link rel="stylesheet" href="style.css">
+</head>
+
+<body class="bg-den-bg text-den-fg font-sans antialiased overflow-x-hidden leading-relaxed">
+
+  <!-- ═══ Navbar ═══ -->
+  <nav class="fixed top-0 left-0 right-0 z-50 bg-den-bg/85 backdrop-blur-xl border-b border-den-border">
+    <div class="max-w-6xl mx-auto flex items-center justify-between px-6 py-3.5">
+      <a href="#" class="flex items-center gap-2.5 text-den-fg font-bold text-lg no-underline">
+        <svg viewBox="0 0 980 980" class="w-7 h-7">
+          <path fill="#fff" fill-rule="evenodd"
+            d="m907.73 888.19c-14.57 30.37-89.83 51.72-189.76 64.06 5.85-16.56 10.77-34.19 14.66-52.85l-110.69-249.99-44.5 49.32-87.19-156.39-87.19 156.39-44.5-49.32-110.94 250.31c3.89 18.59 8.8 36.14 14.63 52.64-100.38-12.32-176.05-33.71-190.67-64.17-24.45-50.96-43.84-108.37-57.13-171.91l217.42-490.57 65.58 75.02 192.52-284.86 192.52 284.86 65.57-75.02 216.94 489.95c-13.3 63.79-32.74 121.41-57.27 172.53z" />
+          <path fill="#3e67ff" fill-rule="evenodd"
+            d="M337.68 923.93L407.42 766.58 435.44 797.63 490.2 699.27 544.97 797.63 572.99 766.58 642.57 923.73C640.12 935.46 637.03 946.54 633.36 956.95 547.55 967.54 432.81 967.57 346.88 957.02 343.21 946.65 340.12 935.61 337.68 923.93Z" />
+        </svg>
+        DEN Chat
+      </a>
+      <div class="hidden lg:flex items-center gap-8">
+        <a href="#why" class="text-den-muted-fg text-sm font-medium hover:text-den-fg transition-colors">Why</a>
+        <a href="#features"
+          class="text-den-muted-fg text-sm font-medium hover:text-den-fg transition-colors">Features</a>
+        <a href="#coming-soon" class="text-den-muted-fg text-sm font-medium hover:text-den-fg transition-colors">Coming
+          Soon</a>
+        <a href="#reality-check"
+          class="text-den-muted-fg text-sm font-medium hover:text-den-fg transition-colors">Reality Check</a>
+        <a href="#faq" class="text-den-muted-fg text-sm font-medium hover:text-den-fg transition-colors">FAQ</a>
+        <a href="#about" class="text-den-muted-fg text-sm font-medium hover:text-den-fg transition-colors">About</a>
+      </div>
+      <a href="https://web.denchat.top"
+        class="hidden lg:inline-flex items-center px-5 py-2 bg-den-primary text-white text-sm font-semibold rounded-lg hover:bg-den-primary-hover transition-colors no-underline"
+        target="_blank" rel="noopener">Open Web App</a>
+      <button id="nav-hamburger"
+        class="lg:hidden flex items-center justify-center w-10 h-10 bg-transparent border-none text-den-fg cursor-pointer"
+        aria-label="Menu" aria-expanded="false">
+        <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none"
+          stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="4" x2="20" y1="12" y2="12" />
+          <line x1="4" x2="20" y1="6" y2="6" />
+          <line x1="4" x2="20" y1="18" y2="18" />
+        </svg>
+      </button>
+    </div>
+    <div id="mobile-menu"
+      class="mobile-menu flex-col gap-1 px-6 pb-5 bg-den-bg/95 backdrop-blur-xl border-b border-den-border">
+      <a href="#why"
+        class="text-den-muted-fg text-[15px] font-medium py-2.5 no-underline hover:text-den-fg transition-colors">Why
+        DEN Chat</a>
+      <a href="#features"
+        class="text-den-muted-fg text-[15px] font-medium py-2.5 no-underline hover:text-den-fg transition-colors">Features</a>
+      <a href="#coming-soon"
+        class="text-den-muted-fg text-[15px] font-medium py-2.5 no-underline hover:text-den-fg transition-colors">Coming
+        Soon</a>
+      <a href="#reality-check"
+        class="text-den-muted-fg text-[15px] font-medium py-2.5 no-underline hover:text-den-fg transition-colors">Reality
+        Check</a>
+      <a href="#faq"
+        class="text-den-muted-fg text-[15px] font-medium py-2.5 no-underline hover:text-den-fg transition-colors">FAQ</a>
+      <a href="#about"
+        class="text-den-muted-fg text-[15px] font-medium py-2.5 no-underline hover:text-den-fg transition-colors">About</a>
+      <a href="https://web.denchat.top"
+        class="mt-2 w-full text-center inline-flex items-center justify-center px-5 py-3 bg-den-primary text-white text-sm font-semibold rounded-lg no-underline"
+        target="_blank" rel="noopener">Open Web App</a>
+    </div>
+  </nav>
+
+  <!-- ═══ Hero ═══ -->
+  <section class="min-h-screen flex items-center justify-center px-6 pt-28 pb-20 text-center">
+    <div>
+      <div class="w-32 h-32 md:w-40 md:h-40 mx-auto mb-8">
+        <svg viewBox="0 0 980 980" class="w-full h-full">
+          <path fill="#fff" fill-rule="evenodd"
+            d="m907.73 888.19c-14.57 30.37-89.83 51.72-189.76 64.06 5.85-16.56 10.77-34.19 14.66-52.85l-110.69-249.99-44.5 49.32-87.19-156.39-87.19 156.39-44.5-49.32-110.94 250.31c3.89 18.59 8.8 36.14 14.63 52.64-100.38-12.32-176.05-33.71-190.67-64.17-24.45-50.96-43.84-108.37-57.13-171.91l217.42-490.57 65.58 75.02 192.52-284.86 192.52 284.86 65.57-75.02 216.94 489.95c-13.3 63.79-32.74 121.41-57.27 172.53z" />
+          <path fill="#3e67ff" fill-rule="evenodd"
+            d="M337.68 923.93L407.42 766.58 435.44 797.63 490.2 699.27 544.97 797.63 572.99 766.58 642.57 923.73C640.12 935.46 637.03 946.54 633.36 956.95 547.55 967.54 432.81 967.57 346.88 957.02 343.21 946.65 340.12 935.61 337.68 923.93Z">
+            <animate attributeName="d" calcMode="discrete" dur="2s" repeatCount="indefinite"
+              values="M337.68 923.93L407.42 766.58 435.44 797.63 490.2 699.27 544.97 797.63 572.99 766.58 642.57 923.73C640.12 935.46 637.03 946.54 633.36 956.95 547.55 967.54 432.81 967.57 346.88 957.02 343.21 946.65 340.12 935.61 337.68 923.93Z;M337.68 923.93L411.42 757.58 431.44 792.63 490.2 687.27 549.97 792.63 569.99 757.58 642.57 923.73C640.12 935.46 637.03 946.54 633.36 956.95 547.55 967.54 432.81 967.57 346.88 957.02 343.21 946.65 340.12 935.61 337.68 923.93Z;M337.68 923.93L402.42 770.58 439.44 802.63 486.2 693.27 540.97 802.63 577.99 770.58 642.57 923.73C640.12 935.46 637.03 946.54 633.36 956.95 547.55 967.54 432.81 967.57 346.88 957.02 343.21 946.65 340.12 935.61 337.68 923.93Z;M337.68 923.93L410.42 772.58 432.44 793.63 492.2 706.27 547.97 793.63 568.99 772.58 642.57 923.73C640.12 935.46 637.03 946.54 633.36 956.95 547.55 967.54 432.81 967.57 346.88 957.02 343.21 946.65 340.12 935.61 337.68 923.93Z" />
+          </path>
+        </svg>
+      </div>
+      <h1 class="text-5xl md:text-6xl font-extrabold tracking-tight mb-2">DEN CHAT</h1>
+      <p class="text-xl text-den-primary font-semibold mb-5">Free your chat</p>
+      <p class="text-[17px] text-den-muted-fg max-w-lg mx-auto mb-10 leading-relaxed">Decentralized, encrypted group
+        chat built on Nostr. One identity, no censorship, permissionless.</p>
+      <div class="flex items-center justify-center gap-3 flex-wrap">
+        <button onclick="openDownloadModal()"
+          class="inline-flex items-center gap-2 px-7 py-3 bg-den-primary text-white text-[15px] font-semibold rounded-lg hover:bg-den-primary-hover transition-colors cursor-pointer border-none">
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+            <polyline points="7 10 12 15 17 10" />
+            <line x1="12" x2="12" y1="15" y2="3" />
+          </svg>
+          Download
+        </button>
+        <a href="https://web.denchat.top"
+          class="inline-flex items-center gap-2 px-7 py-3 bg-transparent text-den-fg text-[15px] font-semibold rounded-lg border border-den-border hover:border-den-muted-fg transition-colors no-underline"
+          target="_blank" rel="noopener">
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10" />
+            <path d="M2 12h20" />
+            <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+          </svg>
+          Open in Browser
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ Why DEN Chat ═══ -->
+  <section id="why" class="bg-den-surface py-24 md:py-28 px-6">
+    <div class="max-w-6xl mx-auto text-center">
+      <h2 class="text-3xl md:text-4xl font-bold tracking-tight mb-3">Why DEN Chat?</h2>
+      <p class="text-[17px] text-den-muted-fg max-w-xl mx-auto mb-12 leading-relaxed">The platforms you rely on today
+        have a fundamental problem: you don't own anything.</p>
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div
+          class="bg-den-muted border border-den-border rounded-xl p-6 text-left hover:border-red-500/30 transition-colors">
+          <div class="w-10 h-10 flex items-center justify-center rounded-lg bg-red-500/10 text-red-500 mb-4"><svg
+              xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
+              stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10" />
+              <path d="m4.9 4.9 14.2 14.2" />
+            </svg></div>
+          <div class="font-semibold mb-1">Censorship &amp; Bans</div>
+          <div class="text-sm text-den-muted-fg leading-relaxed">Platform-wide account bans, message deletions, and
+            content restrictions decided by corporations, not you.</div>
+        </div>
+        <div
+          class="bg-den-muted border border-den-border rounded-xl p-6 text-left hover:border-red-500/30 transition-colors">
+          <div class="w-10 h-10 flex items-center justify-center rounded-lg bg-red-500/10 text-red-500 mb-4"><svg
+              xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
+              stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10" />
+              <path d="m9 12 2 2 4-4" />
+            </svg></div>
+          <div class="font-semibold mb-1">Community Wipes</div>
+          <div class="text-sm text-den-muted-fg leading-relaxed">Entire servers and communities deleted overnight. Years
+            of conversations, gone with no recourse or appeal.</div>
+        </div>
+        <div
+          class="bg-den-muted border border-den-border rounded-xl p-6 text-left hover:border-red-500/30 transition-colors">
+          <div class="w-10 h-10 flex items-center justify-center rounded-lg bg-red-500/10 text-red-500 mb-4"><svg
+              xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
+              stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
+              <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+            </svg></div>
+          <div class="font-semibold mb-1">No Privacy</div>
+          <div class="text-sm text-den-muted-fg leading-relaxed">Messages stored in plaintext on corporate servers.
+            Readable by staff, bots, and anyone who gains access.</div>
+        </div>
+        <div
+          class="bg-den-muted border border-den-border rounded-xl p-6 text-left hover:border-red-500/30 transition-colors">
+          <div class="w-10 h-10 flex items-center justify-center rounded-lg bg-red-500/10 text-red-500 mb-4"><svg
+              xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
+              stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+              <circle cx="9" cy="7" r="4" />
+              <line x1="19" x2="19" y1="8" y2="14" />
+              <line x1="22" x2="16" y1="11" y2="11" />
+            </svg></div>
+          <div class="font-semibold mb-1">Permissioned Access</div>
+          <div class="text-sm text-den-muted-fg leading-relaxed">KYC, age verification, phone numbers, email
+            confirmation. Gatekeeping who can even start a conversation.</div>
+        </div>
+        <div
+          class="bg-den-muted border border-den-border rounded-xl p-6 text-left hover:border-red-500/30 transition-colors">
+          <div class="w-10 h-10 flex items-center justify-center rounded-lg bg-red-500/10 text-red-500 mb-4"><svg
+              xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
+              stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect width="20" height="14" x="2" y="3" rx="2" />
+              <line x1="8" x2="16" y1="21" y2="21" />
+              <line x1="12" x2="12" y1="17" y2="21" />
+            </svg></div>
+          <div class="font-semibold mb-1">Self-Hosting Fragmentation</div>
+          <div class="text-sm text-den-muted-fg leading-relaxed">Join a friend's server? Make an account. Another
+            friend? Another account. UX is broken across instances.</div>
+        </div>
+        <div
+          class="bg-den-muted border border-den-border rounded-xl p-6 text-left hover:border-red-500/30 transition-colors">
+          <div class="w-10 h-10 flex items-center justify-center rounded-lg bg-red-500/10 text-red-500 mb-4"><svg
+              xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
+              stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+              <line x1="12" x2="12" y1="9" y2="13" />
+              <line x1="12" x2="12.01" y1="17" y2="17" />
+            </svg></div>
+          <div class="font-semibold mb-1">Same Problems, Smaller Scale</div>
+          <div class="text-sm text-den-muted-fg leading-relaxed">Even self-hosted alternatives face the same censorship
+            and control issues, scoped to whoever runs the instance.</div>
+        </div>
+      </div>
+      <div class="mt-12 p-8 rounded-xl border border-den-primary/20 bg-den-primary/[0.04] text-left">
+        <div class="text-xl font-bold mb-5">DEN Chat was built to solve all of this.</div>
+        <ul class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 list-none p-0">
+          <li class="flex items-center gap-2.5 text-[15px] text-den-muted-fg"><svg xmlns="http://www.w3.org/2000/svg"
+              width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2.5"
+              stroke-linecap="round" stroke-linejoin="round" class="shrink-0">
+              <polyline points="20 6 9 17 4 12" />
+            </svg> Censorship-resistant</li>
+          <li class="flex items-center gap-2.5 text-[15px] text-den-muted-fg"><svg xmlns="http://www.w3.org/2000/svg"
+              width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2.5"
+              stroke-linecap="round" stroke-linejoin="round" class="shrink-0">
+              <polyline points="20 6 9 17 4 12" />
+            </svg> Permissionless</li>
+          <li class="flex items-center gap-2.5 text-[15px] text-den-muted-fg"><svg xmlns="http://www.w3.org/2000/svg"
+              width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2.5"
+              stroke-linecap="round" stroke-linejoin="round" class="shrink-0">
+              <polyline points="20 6 9 17 4 12" />
+            </svg> Encrypted by default</li>
+          <li class="flex items-center gap-2.5 text-[15px] text-den-muted-fg"><svg xmlns="http://www.w3.org/2000/svg"
+              width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2.5"
+              stroke-linecap="round" stroke-linejoin="round" class="shrink-0">
+              <polyline points="20 6 9 17 4 12" />
+            </svg> No KYC or age verification</li>
+          <li class="flex items-center gap-2.5 text-[15px] text-den-muted-fg"><svg xmlns="http://www.w3.org/2000/svg"
+              width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2.5"
+              stroke-linecap="round" stroke-linejoin="round" class="shrink-0">
+              <polyline points="20 6 9 17 4 12" />
+            </svg> One account everywhere</li>
+          <li class="flex items-center gap-2.5 text-[15px] text-den-muted-fg"><svg xmlns="http://www.w3.org/2000/svg"
+              width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2.5"
+              stroke-linecap="round" stroke-linejoin="round" class="shrink-0">
+              <polyline points="20 6 9 17 4 12" />
+            </svg> You own your identity</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ Features ═══ -->
+  <section id="features" class="py-24 md:py-28 px-6">
+    <div class="max-w-6xl mx-auto text-center">
+      <h2 class="text-3xl md:text-4xl font-bold tracking-tight mb-3">Features</h2>
+      <p class="text-[17px] text-den-muted-fg max-w-xl mx-auto mb-12 leading-relaxed">Everything you need for modern
+        communication, built on freedom.</p>
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div
+          class="bg-den-muted border border-den-border rounded-xl p-6 text-left hover:border-den-primary/30 transition-colors">
+          <div class="w-10 h-10 flex items-center justify-center rounded-lg bg-den-primary/10 text-den-primary mb-4">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
+              stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z" />
+            </svg>
+          </div>
+          <div class="font-semibold mb-1">Text Chat</div>
+          <div class="text-sm text-den-muted-fg leading-relaxed">Hub-based channels with categories, roles, and
+            permissions. Encrypted by default.</div>
+        </div>
+        <div
+          class="bg-den-muted border border-den-border rounded-xl p-6 text-left hover:border-den-primary/30 transition-colors">
+          <div class="w-10 h-10 flex items-center justify-center rounded-lg bg-den-primary/10 text-den-primary mb-4">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
+              stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
+              <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+              <line x1="12" x2="12" y1="19" y2="22" />
+            </svg>
+          </div>
+          <div class="font-semibold mb-1">Voice Chat</div>
+          <div class="text-sm text-den-muted-fg leading-relaxed">Real-time voice channels with push-to-talk and voice
+            activity detection. (Requires setup)</div>
+        </div>
+        <div
+          class="bg-den-muted border border-den-border rounded-xl p-6 text-left hover:border-den-primary/30 transition-colors">
+          <div class="w-10 h-10 flex items-center justify-center rounded-lg bg-den-primary/10 text-den-primary mb-4">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
+              stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="m16 13 5.223 3.482a.5.5 0 0 0 .777-.416V7.87a.5.5 0 0 0-.752-.432L16 10.5" />
+              <rect x="2" y="6" width="14" height="12" rx="2" />
+            </svg>
+          </div>
+          <div class="font-semibold mb-1">Video &amp; Screen Streaming</div>
+          <div class="text-sm text-den-muted-fg leading-relaxed">Share your screen or camera directly in voice channels.
+            (Requires setup)</div>
+        </div>
+        <div
+          class="bg-den-muted border border-den-border rounded-xl p-6 text-left hover:border-den-primary/30 transition-colors">
+          <div class="w-10 h-10 flex items-center justify-center rounded-lg bg-den-primary/10 text-den-primary mb-4">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
+              stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect width="20" height="16" x="2" y="4" rx="2" />
+              <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
+            </svg>
+          </div>
+          <div class="font-semibold mb-1">Direct Messages</div>
+          <div class="text-sm text-den-muted-fg leading-relaxed">End-to-end encrypted private conversations.</div>
+        </div>
+        <div
+          class="bg-den-muted border border-den-border rounded-xl p-6 text-left hover:border-den-primary/30 transition-colors">
+          <div class="w-10 h-10 flex items-center justify-center rounded-lg bg-den-primary/10 text-den-primary mb-4">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
+              stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10" />
+              <path d="M2 12h20" />
+              <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+            </svg>
+          </div>
+          <div class="font-semibold mb-1">Public Chat</div>
+          <div class="text-sm text-den-muted-fg leading-relaxed">Chat with the public about whatever topic you choose to
+            talk about.</div>
+        </div>
+        <div
+          class="bg-den-muted border border-den-border rounded-xl p-6 text-left hover:border-den-primary/30 transition-colors">
+          <div class="w-10 h-10 flex items-center justify-center rounded-lg bg-den-primary/10 text-den-primary mb-4">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
+              stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path
+                d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" />
+            </svg>
+          </div>
+          <div class="font-semibold mb-1">Social Posting</div>
+          <div class="text-sm text-den-muted-fg leading-relaxed">Share posts and long-form content with your community.
+          </div>
+        </div>
+        <div
+          class="bg-den-muted border border-den-border rounded-xl p-6 text-left hover:border-den-primary/30 transition-colors">
+          <div class="w-10 h-10 flex items-center justify-center rounded-lg bg-den-primary/10 text-den-primary mb-4">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
+              stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" />
+              <path d="M14 2v4a2 2 0 0 0 2 2h4" />
+            </svg>
+          </div>
+          <div class="font-semibold mb-1">Blogging</div>
+          <div class="text-sm text-den-muted-fg leading-relaxed">Write and publish long-form articles directly from the
+            app.</div>
+        </div>
+        <div
+          class="bg-den-muted border border-den-border rounded-xl p-6 text-left hover:border-den-primary/30 transition-colors">
+          <div class="w-10 h-10 flex items-center justify-center rounded-lg bg-den-primary/10 text-den-primary mb-4">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
+              stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10" />
+              <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76" />
+            </svg>
+          </div>
+          <div class="font-semibold mb-1">Discover Hubs</div>
+          <div class="text-sm text-den-muted-fg leading-relaxed">Browse and join communities across the decentralized
+            network.</div>
+        </div>
+        <div
+          class="bg-den-muted border border-den-border rounded-xl p-6 text-left hover:border-den-primary/30 transition-colors">
+          <div class="w-10 h-10 flex items-center justify-center rounded-lg bg-den-primary/10 text-den-primary mb-4">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
+              stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path
+                d="M3 14h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7a9 9 0 0 1 18 0v7a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3" />
+            </svg>
+          </div>
+          <div class="font-semibold mb-1">Spatial Audio</div>
+          <div class="text-sm text-den-muted-fg leading-relaxed">VRChat-style positional audio. Hear people based on
+            their position.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ Coming Soon ═══ -->
+  <section id="coming-soon" class="bg-den-surface py-24 md:py-28 px-6">
+    <div class="max-w-6xl mx-auto text-center">
+      <h2 class="text-3xl md:text-4xl font-bold tracking-tight mb-3">Coming Soon</h2>
+      <p class="text-[17px] text-den-muted-fg max-w-xl mx-auto mb-12 leading-relaxed">We're just getting started. Here's
+        what's on the roadmap.</p>
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div class="bg-den-muted border border-den-border rounded-xl p-5 flex items-start gap-4 text-left">
+          <div class="w-10 h-10 flex items-center justify-center rounded-lg bg-purple-500/10 text-purple-500 shrink-0">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
+              stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="6" x2="10" y1="11" y2="11" />
+              <line x1="8" x2="8" y1="9" y2="13" />
+              <line x1="15" x2="15.01" y1="12" y2="12" />
+              <line x1="18" x2="18.01" y1="10" y2="10" />
+              <path
+                d="M17.32 5H6.68a4 4 0 0 0-3.978 3.59c-.006.052-.01.101-.017.152C2.604 9.416 2 14.456 2 16a3 3 0 0 0 3 3c1 0 1.5-.5 2-1l1.414-1.414A2 2 0 0 1 9.828 16h4.344a2 2 0 0 1 1.414.586L17 18c.5.5 1 1 2 1a3 3 0 0 0 3-3c0-1.545-.604-6.584-.685-7.258-.007-.05-.011-.1-.017-.151A4 4 0 0 0 17.32 5z" />
+            </svg>
+          </div>
+          <div>
+            <div class="font-semibold mb-1">On-Game Chat Overlay</div>
+            <div class="text-sm text-den-muted-fg">Chat that runs on top of your game, not through the game's servers.
+              Bringing back an even freer online on-game ("in-game") chat.</div>
+            <div class="text-[11px] font-semibold uppercase tracking-wider text-purple-500 mt-1.5">Planned</div>
+          </div>
+        </div>
+        <div class="bg-den-muted border border-den-border rounded-xl p-5 flex items-start gap-4 text-left">
+          <div class="w-10 h-10 flex items-center justify-center rounded-lg bg-purple-500/10 text-purple-500 shrink-0">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
+              stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect width="7" height="7" x="3" y="3" rx="1" />
+              <rect width="7" height="7" x="3" y="14" rx="1" />
+              <path d="M14 4h7" />
+              <path d="M14 9h7" />
+              <path d="M14 15h7" />
+              <path d="M14 20h7" />
+            </svg>
+          </div>
+          <div>
+            <div class="font-semibold mb-1">Forums</div>
+            <div class="text-sm text-den-muted-fg">Threaded discussions and long-form conversations.</div>
+            <div class="text-[11px] font-semibold uppercase tracking-wider text-purple-500 mt-1.5">Planned</div>
+          </div>
+        </div>
+        <div class="bg-den-muted border border-den-border rounded-xl p-5 flex items-start gap-4 text-left">
+          <div class="w-10 h-10 flex items-center justify-center rounded-lg bg-purple-500/10 text-purple-500 shrink-0">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
+              stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polygon points="6 3 20 12 6 21 6 3" />
+            </svg>
+          </div>
+          <div>
+            <div class="font-semibold mb-1">Video Browsing</div>
+            <div class="text-sm text-den-muted-fg">Discover and watch video content across the network.</div>
+            <div class="text-[11px] font-semibold uppercase tracking-wider text-purple-500 mt-1.5">Planned</div>
+          </div>
+        </div>
+        <div class="bg-den-muted border border-den-border rounded-xl p-5 flex items-start gap-4 text-left">
+          <div class="w-10 h-10 flex items-center justify-center rounded-lg bg-purple-500/10 text-purple-500 shrink-0">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
+              stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="22 12 16 12 14 15 10 15 8 12 2 12" />
+              <path
+                d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z" />
+            </svg>
+          </div>
+          <div>
+            <div class="font-semibold mb-1">n-mail</div>
+            <div class="text-sm text-den-muted-fg">Nostr-native email. Decentralized messaging.</div>
+            <div class="text-[11px] font-semibold uppercase tracking-wider text-purple-500 mt-1.5">Planned</div>
+          </div>
+        </div>
+        <div class="bg-den-muted border border-den-border rounded-xl p-5 flex items-start gap-4 text-left">
+          <div class="w-10 h-10 flex items-center justify-center rounded-lg bg-purple-500/10 text-purple-500 shrink-0">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
+              stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5C7 4 8 6 8 6s1-2 3.5-2a2.5 2.5 0 0 1 0 5H10" />
+              <path d="M6 9v12" />
+              <path d="M10 9v12" />
+            </svg>
+          </div>
+          <div>
+            <div class="font-semibold mb-1">Game &amp; Mod Discovery</div>
+            <div class="text-sm text-den-muted-fg">Find games and mods shared across the network.</div>
+            <div class="text-[11px] font-semibold uppercase tracking-wider text-purple-500 mt-1.5">Planned</div>
+          </div>
+        </div>
+        <div class="bg-den-muted border border-den-border rounded-xl p-5 flex items-start gap-4 text-left">
+          <div class="w-10 h-10 flex items-center justify-center rounded-lg bg-purple-500/10 text-purple-500 shrink-0">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
+              stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path
+                d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z" />
+            </svg>
+          </div>
+          <div>
+            <div class="font-semibold mb-1">And More</div>
+            <div class="text-sm text-den-muted-fg">The protocol is extensible. More coming over time.</div>
+            <div class="text-[11px] font-semibold uppercase tracking-wider text-purple-500 mt-1.5">Ongoing</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ Reality Check ═══ -->
+  <section id="reality-check" class="py-24 md:py-28 px-6">
+    <div class="max-w-6xl mx-auto text-center">
+      <h2 class="text-3xl md:text-4xl font-bold tracking-tight mb-3">Reality Check</h2>
+      <p class="text-[17px] text-den-muted-fg max-w-xl mx-auto mb-12 leading-relaxed">We believe in transparency. Here's
+        what you should know.</p>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+        <div class="bg-den-muted border border-den-border rounded-xl p-8 text-left">
+          <div class="font-semibold mb-3">Early Technology</div>
+          <p class="text-[15px] text-den-muted-fg leading-relaxed">This is new technology. DEN Chat is an experimental
+            implementation of a specification that is not yet standardized or widely tested. The app is in <strong
+              class="text-den-fg">alpha</strong>. Things will most likely break, features may not work as expected, and
+            data could be lost. There will be a learning curve, especially if you're new to decentralized systems.</p>
+        </div>
+        <div class="bg-den-muted border border-den-border rounded-xl p-8 text-left">
+          <div class="font-semibold mb-3">Freedom = Responsibility</div>
+          <p class="text-[15px] text-den-muted-fg leading-relaxed">With the highest freedom comes the highest
+            responsibility. <strong class="text-den-fg">You are in full control</strong>, including managing your own
+            security. Your seed phrase and private keys are yours alone. Losing or compromising them means <strong
+              class="text-den-fg">no possible recovery</strong>. No one can help you. There is no "forgot password"
+            button.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ FAQ ═══ -->
+  <section id="faq" class="bg-den-surface py-24 md:py-28 px-6">
+    <div class="max-w-6xl mx-auto text-center">
+      <h2 class="text-3xl md:text-4xl font-bold tracking-tight mb-3">Facts &amp; Questions</h2>
+      <p class="text-[17px] text-den-muted-fg max-w-xl mx-auto mb-12 leading-relaxed">Got questions? We've got answers.
+      </p>
+      <!-- Loading state -->
+      <div id="faq-loading" class="flex flex-col items-center justify-center py-12 gap-3">
+        <svg class="animate-spin h-6 w-6 text-den-primary" viewBox="0 0 24 24" fill="none">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3"/>
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+        </svg>
+        <p class="text-sm text-den-muted-fg">Loading questions...</p>
+      </div>
+      <!-- Error state -->
+      <div id="faq-error" class="flex flex-col items-center justify-center py-12 gap-3" style="display:none">
+        <p class="text-sm text-den-muted-fg">Failed to load FAQ.</p>
+        <button onclick="retryFaqFetch()" class="flex items-center gap-1.5 px-4 py-2 rounded-lg border border-den-border bg-den-muted text-sm font-medium text-den-fg hover:bg-den-muted/80 transition-colors cursor-pointer">
+          Try Again
+        </button>
+      </div>
+      <!-- Search (hidden until loaded) -->
+      <div id="faq-search-wrap"
+        class="w-full max-w-md mx-auto mb-8 flex items-center gap-3 bg-den-muted border border-den-border rounded-lg px-4 py-3 focus-within:border-den-primary transition-colors"
+        style="display:none">
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
+          stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+          class="text-den-muted-fg shrink-0">
+          <circle cx="11" cy="11" r="8" />
+          <path d="m21 21-4.3-4.3" />
+        </svg>
+        <input type="text" id="faq-search-input" placeholder="Search questions..."
+          class="flex-1 bg-transparent border-none outline-none text-den-fg text-sm placeholder-den-muted-fg font-sans">
+      </div>
+      <div id="faq-list" class="max-w-2xl mx-auto flex flex-col gap-2"></div>
+      <div id="faq-no-results" class="text-center py-8 text-den-muted-fg text-sm" style="display:none">No questions
+        match your search.</div>
+      <div id="faq-pagination" class="flex items-center justify-center gap-2 mt-6"></div>
+    </div>
+  </section>
+
+  <!-- ═══ About ═══ -->
+  <section id="about" class="py-24 md:py-28 px-6">
+    <div class="max-w-xl mx-auto text-center">
+      <h2 class="text-3xl md:text-4xl font-bold tracking-tight mb-3">About</h2>
+      <p class="text-base text-den-muted-fg leading-relaxed mb-4">DEN Chat is built by
+        <strong class="text-den-fg">Freeden</strong> (Free Developer Network), a developer effort dedicated to
+        increasing freedoms through technology.</p>
+      <p class="text-base text-den-muted-fg leading-relaxed">Freeden produces various open-source projects with a
+        single goal: building tools that respect privacy, ownership, and freedom without compromise.</p>
+    </div>
+  </section>
+
+  <!-- ═══ Footer CTA ═══ -->
+  <section class="bg-den-surface py-24 md:py-28 px-6">
+    <div class="max-w-6xl mx-auto text-center">
+      <h2 class="text-3xl md:text-4xl font-bold tracking-tight mb-4">Are you ready to free your chat?</h2>
+      <p class="text-[17px] text-den-muted-fg mb-8">Join the decentralized communication revolution. No sign-up
+        required.</p>
+      <div class="flex items-center justify-center gap-3 flex-wrap">
+        <button onclick="openDownloadModal()"
+          class="inline-flex items-center gap-2 px-7 py-3 bg-den-primary text-white text-[15px] font-semibold rounded-lg hover:bg-den-primary-hover transition-colors cursor-pointer border-none">
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+            <polyline points="7 10 12 15 17 10" />
+            <line x1="12" x2="12" y1="15" y2="3" />
+          </svg>
+          Download
+        </button>
+        <a href="https://web.denchat.top"
+          class="inline-flex items-center gap-2 px-7 py-3 bg-transparent text-den-fg text-[15px] font-semibold rounded-lg border border-den-border hover:border-den-muted-fg transition-colors no-underline"
+          target="_blank" rel="noopener">
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10" />
+            <path d="M2 12h20" />
+            <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+          </svg>
+          Open in Browser
+        </a>
+      </div>
+      <div class="mt-16 pt-8 border-t border-den-border flex items-center justify-between flex-wrap gap-4">
+        <span class="text-[13px] text-den-muted-fg">&copy; 2025 DEN Chat. Built on Nostr.</span>
+        <div class="flex gap-6">
+          <a href="https://web.denchat.top" target="_blank" rel="noopener"
+            class="text-[13px] text-den-muted-fg no-underline hover:text-den-fg transition-colors">Web App</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ Download Modal ═══ -->
+  <div id="download-modal" class="fixed inset-0 z-[100] hidden items-center justify-center">
+    <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" onclick="closeDownloadModal()"></div>
+    <div class="relative w-full max-w-lg mx-4 bg-den-bg border border-den-border rounded-2xl shadow-2xl max-h-[85vh] overflow-hidden flex flex-col">
+      <div class="flex items-center justify-between px-6 py-4 border-b border-den-border">
+        <h3 class="text-lg font-semibold">Download DEN Chat</h3>
+        <button onclick="closeDownloadModal()" class="w-8 h-8 flex items-center justify-center rounded-lg text-den-muted-fg hover:text-den-fg hover:bg-den-muted transition-colors cursor-pointer bg-transparent border-none">
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+        </button>
+      </div>
+      <div id="download-modal-content" class="px-6 py-5 overflow-y-auto flex-1"></div>
+    </div>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+
+</html>

@@ -1,0 +1,96 @@
+/* DEN Chat Landing - Custom styles (Tailwind handles the rest) */
+
+html {
+  scroll-behavior: smooth;
+  scroll-padding-top: 5rem;
+}
+
+::selection {
+  background-color: rgba(75, 107, 255, 0.2);
+}
+
+/* Scrollbar */
+* { scrollbar-color: rgba(161,161,170,0.25) transparent; }
+::-webkit-scrollbar { width: 12px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background-color: rgba(161,161,170,0.25); border-radius: 999px; }
+::-webkit-scrollbar-thumb:hover { background-color: rgba(161,161,170,0.4); }
+
+/* FAQ accordion animation */
+.faq-answer {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.25s ease;
+}
+.faq-item.active .faq-answer {
+  max-height: 80rem;
+}
+.faq-item.active .faq-chevron {
+  transform: rotate(180deg);
+}
+.faq-chevron {
+  transition: transform 0.2s ease;
+}
+
+/* Mobile menu */
+.mobile-menu { display: none; }
+.mobile-menu.open { display: flex; }
+
+/* FAQ markdown prose */
+.faq-prose strong { color: #fafafa; }
+.faq-prose code {
+  background: rgba(255,255,255,0.06);
+  padding: 0.15em 0.4em;
+  border-radius: 4px;
+  font-size: 0.85em;
+  font-family: 'Fira Code', 'Consolas', monospace;
+}
+.faq-prose pre {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid #262626;
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  overflow-x: auto;
+  margin: 0.5rem 0;
+}
+.faq-prose pre code {
+  background: none;
+  padding: 0;
+  font-size: 0.8em;
+}
+.faq-prose a { color: #4B6BFF; text-decoration: underline; }
+.faq-prose a:hover { color: #6983FF; }
+.faq-prose ul { list-style: disc; padding-left: 1.25rem; margin: 0.5rem 0; }
+.faq-prose ol { list-style: decimal; padding-left: 1.25rem; margin: 0.5rem 0; }
+.faq-prose li { margin: 0.15rem 0; }
+.faq-prose p { margin: 0.4rem 0; }
+.faq-prose h1, .faq-prose h2, .faq-prose h3, .faq-prose h4 {
+  color: #fafafa;
+  font-weight: 600;
+  margin: 0.75rem 0 0.25rem;
+}
+.faq-prose blockquote {
+  border-left: 2px solid rgba(75,107,255,0.4);
+  padding-left: 0.75rem;
+  color: #a1a1aa;
+  font-style: italic;
+  margin: 0.5rem 0;
+}
+.faq-prose table { width: 100%; border-collapse: collapse; font-size: 0.8rem; margin: 0.5rem 0; }
+.faq-prose th {
+  text-align: left;
+  padding: 0.4rem 0.6rem;
+  font-weight: 600;
+  color: #fafafa;
+  background: rgba(255,255,255,0.04);
+  border-bottom: 1px solid #262626;
+}
+.faq-prose td {
+  padding: 0.35rem 0.6rem;
+  border-bottom: 1px solid #262626;
+}
+.faq-prose hr {
+  border: none;
+  border-top: 1px solid #262626;
+  margin: 0.75rem 0;
+}
