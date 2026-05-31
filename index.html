@@ -60,6 +60,7 @@
         <a href="#reality-check"
           class="text-den-muted-fg text-sm font-medium hover:text-den-fg transition-colors">Reality Check</a>
         <a href="#faq" class="text-den-muted-fg text-sm font-medium hover:text-den-fg transition-colors">FAQ</a>
+        <a href="#guides" class="text-den-muted-fg text-sm font-medium hover:text-den-fg transition-colors">Guides</a>
         <a href="#about" class="text-den-muted-fg text-sm font-medium hover:text-den-fg transition-colors">About</a>
       </div>
       <a href="https://web.denchat.top"
@@ -91,6 +92,8 @@
         Check</a>
       <a href="#faq"
         class="text-den-muted-fg text-[15px] font-medium py-2.5 no-underline hover:text-den-fg transition-colors">FAQ</a>
+      <a href="#guides"
+        class="text-den-muted-fg text-[15px] font-medium py-2.5 no-underline hover:text-den-fg transition-colors">Guides</a>
       <a href="#about"
         class="text-den-muted-fg text-[15px] font-medium py-2.5 no-underline hover:text-den-fg transition-colors">About</a>
       <a href="https://web.denchat.top"
@@ -565,6 +568,67 @@
     </div>
   </section>
 
+  <!-- ═══ Guides & Tutorials ═══ -->
+  <section id="guides" class="py-24 md:py-28 px-6">
+    <div class="max-w-6xl mx-auto text-center">
+      <h2 class="text-3xl md:text-4xl font-bold tracking-tight mb-3">Guides &amp; Tutorials</h2>
+      <p class="text-[17px] text-den-muted-fg max-w-xl mx-auto mb-12 leading-relaxed">Learn how to get the most out of
+        DEN Chat.</p>
+      <!-- Loading -->
+      <div id="guides-loading" class="flex flex-col items-center justify-center py-12 gap-3">
+        <svg class="animate-spin h-6 w-6 text-den-primary" viewBox="0 0 24 24" fill="none">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3"/>
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+        </svg>
+        <p class="text-sm text-den-muted-fg">Loading guides...</p>
+      </div>
+      <!-- Error -->
+      <div id="guides-error" class="flex flex-col items-center justify-center py-12 gap-3" style="display:none">
+        <p class="text-sm text-den-muted-fg">Failed to load guides.</p>
+        <button onclick="retryGuidesFetch()"
+          class="flex items-center gap-1.5 px-4 py-2 rounded-lg border border-den-border bg-den-muted text-sm font-medium text-den-fg hover:bg-den-muted/80 transition-colors cursor-pointer">
+          Try Again
+        </button>
+      </div>
+      <!-- Search (hidden until loaded) -->
+      <div id="guides-search-wrap"
+        class="w-full max-w-md mx-auto mb-8 flex items-center gap-3 bg-den-muted border border-den-border rounded-lg px-4 py-3 focus-within:border-den-primary transition-colors"
+        style="display:none">
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
+          stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+          class="text-den-muted-fg shrink-0">
+          <circle cx="11" cy="11" r="8" />
+          <path d="m21 21-4.3-4.3" />
+        </svg>
+        <input type="text" id="guides-search-input" placeholder="Search guides..."
+          class="flex-1 bg-transparent border-none outline-none text-den-fg text-sm placeholder-den-muted-fg font-sans">
+      </div>
+      <div id="guides-list" class="max-w-4xl mx-auto grid grid-cols-1 sm:grid-cols-2 gap-4"></div>
+      <div id="guides-no-results" class="text-center py-8 text-den-muted-fg text-sm" style="display:none">No guides
+        match your search.</div>
+      <div id="guides-pagination" class="flex items-center justify-center gap-2 mt-6"></div>
+    </div>
+  </section>
+
+  <!-- ═══ Guide Reader Modal ═══ -->
+  <div id="guide-modal" class="fixed inset-0 z-[100] hidden items-center justify-center">
+    <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" onclick="closeGuideModal()"></div>
+    <div
+      class="relative w-full max-w-3xl mx-4 bg-den-bg border border-den-border rounded-2xl shadow-2xl max-h-[90vh] overflow-hidden flex flex-col">
+      <div class="flex items-center justify-between px-6 py-4 border-b border-den-border shrink-0">
+        <h3 id="guide-modal-title" class="text-lg font-semibold truncate pr-4"></h3>
+        <button onclick="closeGuideModal()"
+          class="w-8 h-8 flex items-center justify-center rounded-lg text-den-muted-fg hover:text-den-fg hover:bg-den-muted transition-colors cursor-pointer bg-transparent border-none shrink-0">
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M18 6 6 18" />
+            <path d="m6 6 12 12" />
+          </svg>
+        </button>
+      </div>
+      <div id="guide-modal-content" class="px-6 py-5 overflow-y-auto flex-1 faq-prose text-sm text-den-muted-fg leading-relaxed text-left"></div>
+    </div>
+  </div>
   <!-- ═══ About ═══ -->
   <section id="about" class="py-24 md:py-28 px-6">
     <div class="max-w-xl mx-auto text-center">

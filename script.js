@@ -3,6 +3,7 @@
 document.addEventListener('DOMContentLoaded', () => {
   initMobileNav();
   initFaq();
+  initGuides();
 });
 
 // ── Mobile Navigation ──
@@ -275,6 +276,321 @@ function fetchFaqFromNostr() {
   });
 }
 
+// ── Guides & Tutorials ──
+
+const GUIDES_DTAG = 'den-chat-guides';
+const GUIDES_PER_PAGE = 6;
+let guidesPage = 0;
+let guidesData = [];
+let guidesFiltered = [];
+let guideModalOpen = false;
+
+function initGuides() {
+  fetchGuidesFromNostr().then(guides => {
+    guidesData = guides;
+    guidesFiltered = [...guidesData];
+    showGuidesReady();
+    renderGuides();
+    bindGuidesSearch();
+  }).catch(() => {
+    showGuidesError();
+  });
+}
+
+function showGuidesReady() {
+  const loading = document.getElementById('guides-loading');
+  const error = document.getElementById('guides-error');
+  const search = document.getElementById('guides-search-wrap');
+  if (loading) loading.style.display = 'none';
+  if (error) error.style.display = 'none';
+  if (search) search.style.display = guidesData.length > 0 ? 'flex' : 'none';
+}
+
+function showGuidesError() {
+  const loading = document.getElementById('guides-loading');
+  const error = document.getElementById('guides-error');
+  if (loading) loading.style.display = 'none';
+  if (error) error.style.display = 'flex';
+}
+
+function retryGuidesFetch() {
+  const loading = document.getElementById('guides-loading');
+  const error = document.getElementById('guides-error');
+  if (loading) loading.style.display = 'flex';
+  if (error) error.style.display = 'none';
+
+  fetchGuidesFromNostr().then(guides => {
+    guidesData = guides;
+    guidesFiltered = [...guidesData];
+    showGuidesReady();
+    renderGuides();
+    bindGuidesSearch();
+  }).catch(() => {
+    showGuidesError();
+  });
+}
+
+function bindGuidesSearch() {
+  const searchInput = document.getElementById('guides-search-input');
+  if (!searchInput) return;
+
+  searchInput.addEventListener('input', (e) => {
+    const query = e.target.value.toLowerCase().trim();
+    if (!query) {
+      guidesFiltered = [...guidesData];
+    } else {
+      guidesFiltered = guidesData.filter(
+        g => g.title.toLowerCase().includes(query) || g.summary.toLowerCase().includes(query)
+      );
+    }
+    guidesPage = 0;
+    renderGuides();
+  });
+}
+
+function renderGuides() {
+  const list = document.getElementById('guides-list');
+  const pagination = document.getElementById('guides-pagination');
+  const noResults = document.getElementById('guides-no-results');
+  if (!list || !pagination) return;
+
+  const totalPages = Math.ceil(guidesFiltered.length / GUIDES_PER_PAGE);
+  const start = guidesPage * GUIDES_PER_PAGE;
+  const pageItems = guidesFiltered.slice(start, start + GUIDES_PER_PAGE);
+
+  if (noResults) {
+    noResults.style.display = guidesFiltered.length === 0 ? 'block' : 'none';
+  }
+
+  list.innerHTML = pageItems.map((guide, i) => {
+    const idx = start + i;
+    const dateStr = new Date(guide.publishedAt * 1000).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+    return `
+      <button onclick="openGuideModal(${idx})" class="guide-card bg-den-muted border border-den-border rounded-xl p-5 text-left hover:border-den-primary/40 transition-all cursor-pointer group">
+        <div class="flex items-start gap-3">
+          <div class="w-9 h-9 flex items-center justify-center rounded-lg bg-den-primary/10 text-den-primary shrink-0 mt-0.5">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H19a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1H6.5a1 1 0 0 1 0-5H20"/></svg>
+          </div>
+          <div class="flex-1 min-w-0">
+            <div class="font-semibold text-den-fg text-[15px] mb-1 group-hover:text-den-primary transition-colors">${guide.title}</div>
+            ${guide.summary ? `<div class="text-xs text-den-muted-fg leading-relaxed line-clamp-2">${guide.summary}</div>` : ''}
+            <div class="text-[11px] text-den-muted-fg/60 mt-2">${dateStr}</div>
+          </div>
+        </div>
+      </button>`;
+  }).join('');
+
+  // Pagination (reuse FAQ pattern)
+  if (totalPages <= 1) {
+    pagination.innerHTML = '';
+    return;
+  }
+
+  const btnBase = 'flex items-center justify-center w-9 h-9 rounded-md bg-transparent border border-den-border text-den-muted-fg cursor-pointer transition-colors text-[13px] font-semibold hover:border-den-muted-fg hover:text-den-fg disabled:opacity-30 disabled:cursor-not-allowed';
+  const btnActive = 'flex items-center justify-center w-9 h-9 rounded-md bg-den-primary border-den-primary text-white text-[13px] font-semibold cursor-pointer';
+
+  let html = `
+    <button class="${btnBase}" onclick="guidesPageNav(-1)" ${guidesPage === 0 ? 'disabled' : ''} aria-label="Previous">
+      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+    </button>`;
+
+  for (let i = 0; i < totalPages; i++) {
+    html += `<button class="${i === guidesPage ? btnActive : btnBase}" onclick="guidesPageNav(null, ${i})">${i + 1}</button>`;
+  }
+
+  html += `
+    <button class="${btnBase}" onclick="guidesPageNav(1)" ${guidesPage === totalPages - 1 ? 'disabled' : ''} aria-label="Next">
+      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+    </button>`;
+
+  pagination.innerHTML = html;
+}
+
+function guidesPageNav(delta, page) {
+  if (page !== null && page !== undefined) {
+    guidesPage = page;
+  } else {
+    guidesPage += delta;
+  }
+  renderGuides();
+}
+
+function openGuideModal(idx) {
+  const guide = guidesFiltered[idx];
+  if (!guide) return;
+  const modal = document.getElementById('guide-modal');
+  const title = document.getElementById('guide-modal-title');
+  const content = document.getElementById('guide-modal-content');
+  if (!modal || !title || !content) return;
+
+  title.textContent = guide.title;
+  const rendered = typeof marked !== 'undefined' ? marked.parse(guide.content) : guide.content;
+  content.innerHTML = rendered;
+  content.scrollTop = 0;
+
+  modal.classList.remove('hidden');
+  modal.classList.add('flex');
+  guideModalOpen = true;
+  document.body.style.overflow = 'hidden';
+}
+
+function closeGuideModal() {
+  const modal = document.getElementById('guide-modal');
+  if (!modal) return;
+  modal.classList.add('hidden');
+  modal.classList.remove('flex');
+  guideModalOpen = false;
+  if (!downloadModalOpen) document.body.style.overflow = '';
+}
+
+// Two-step Nostr fetch for guides:
+// 1. Fetch master list (kind:30078, d:'den-chat-guides') -> JSON array of a-tag coordinates
+// 2. Fetch each referenced kind:30023 article event
+function fetchGuidesFromNostr() {
+  return new Promise((resolve, reject) => {
+    // Step 1: fetch the master list
+    fetchNostrReplaceable(GUIDES_DTAG).then(masterEvent => {
+      if (!masterEvent || !masterEvent.content) {
+        resolve([]);
+        return;
+      }
+
+      let coordinates;
+      try {
+        coordinates = JSON.parse(masterEvent.content);
+      } catch {
+        resolve([]);
+        return;
+      }
+
+      if (!Array.isArray(coordinates) || coordinates.length === 0) {
+        resolve([]);
+        return;
+      }
+
+      // Step 2: parse coordinates and fetch each article
+      const filters = coordinates.map(coord => {
+        const parts = coord.split(':');
+        if (parts.length >= 3) {
+          return { kinds: [parseInt(parts[0])], authors: [parts[1]], '#d': [parts.slice(2).join(':')] };
+        }
+        return null;
+      }).filter(Boolean);
+
+      Promise.allSettled(filters.map(f => fetchNostrEvents(f))).then(results => {
+        const guides = [];
+        for (let i = 0; i < results.length; i++) {
+          const result = results[i];
+          if (result.status !== 'fulfilled' || result.value.length === 0) continue;
+          const ev = result.value.sort((a, b) => b.created_at - a.created_at)[0];
+          const getTag = (name) => ev.tags.find(t => t[0] === name)?.[1] || '';
+          guides.push({
+            coordinate: coordinates[i],
+            title: getTag('title') || 'Untitled',
+            summary: getTag('summary'),
+            imageUrl: getTag('image'),
+            content: ev.content,
+            publishedAt: parseInt(getTag('published_at')) || ev.created_at,
+          });
+        }
+
+        // Preserve master list order
+        const ordered = coordinates
+          .map(coord => guides.find(g => g.coordinate === coord))
+          .filter(Boolean);
+
+        resolve(ordered);
+      });
+    }).catch(reject);
+  });
+}
+
+// Generic Nostr helpers (used by guides)
+function fetchNostrReplaceable(dTag) {
+  return new Promise((resolve, reject) => {
+    const filter = { authors: [ADMIN_PUBKEY], kinds: [30078], '#d': [dTag] };
+    let bestEvent = null;
+    let resolved = false;
+    let completedRelays = 0;
+    const sockets = [];
+
+    const finish = () => {
+      if (resolved) return;
+      resolved = true;
+      sockets.forEach(ws => { try { ws.close(); } catch {} });
+      resolve(bestEvent);
+    };
+
+    const timeout = setTimeout(finish, 8000);
+
+    for (const relay of RELAYS) {
+      try {
+        const ws = new WebSocket(relay);
+        sockets.push(ws);
+        ws.onopen = () => ws.send(JSON.stringify(['REQ', 'r_' + Math.random().toString(36).slice(2, 6), filter]));
+        ws.onmessage = (msg) => {
+          try {
+            const data = JSON.parse(msg.data);
+            if (data[0] === 'EVENT' && data[2]) {
+              if (!bestEvent || data[2].created_at > bestEvent.created_at) bestEvent = data[2];
+            }
+            if (data[0] === 'EOSE') {
+              completedRelays++;
+              if (completedRelays >= RELAYS.length) { clearTimeout(timeout); finish(); }
+            }
+          } catch {}
+        };
+        ws.onerror = ws.onclose = () => {
+          completedRelays++;
+          if (completedRelays >= RELAYS.length && !resolved) { clearTimeout(timeout); finish(); }
+        };
+      } catch { completedRelays++; }
+    }
+  });
+}
+
+function fetchNostrEvents(filter) {
+  return new Promise((resolve, reject) => {
+    const events = [];
+    let resolved = false;
+    let completedRelays = 0;
+    const sockets = [];
+
+    const finish = () => {
+      if (resolved) return;
+      resolved = true;
+      sockets.forEach(ws => { try { ws.close(); } catch {} });
+      resolve(events);
+    };
+
+    const timeout = setTimeout(finish, 8000);
+
+    for (const relay of RELAYS) {
+      try {
+        const ws = new WebSocket(relay);
+        sockets.push(ws);
+        ws.onopen = () => ws.send(JSON.stringify(['REQ', 'e_' + Math.random().toString(36).slice(2, 6), filter]));
+        ws.onmessage = (msg) => {
+          try {
+            const data = JSON.parse(msg.data);
+            if (data[0] === 'EVENT' && data[2]) {
+              if (!events.find(e => e.id === data[2].id)) events.push(data[2]);
+            }
+            if (data[0] === 'EOSE') {
+              completedRelays++;
+              if (completedRelays >= RELAYS.length) { clearTimeout(timeout); finish(); }
+            }
+          } catch {}
+        };
+        ws.onerror = ws.onclose = () => {
+          completedRelays++;
+          if (completedRelays >= RELAYS.length && !resolved) { clearTimeout(timeout); finish(); }
+        };
+      } catch { completedRelays++; }
+    }
+  });
+}
+
 // ── Download Modal ──
 
 const BUILD_DTAG_PREFIX = 'den-chat-build-';
@@ -314,6 +630,7 @@ function closeDownloadModal() {
 }
 
 document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && guideModalOpen) { closeGuideModal(); return; }
   if (e.key === 'Escape' && downloadModalOpen) closeDownloadModal();
 });
 

@@ -36,6 +36,9 @@ html {
 .mobile-menu { display: none; }
 .mobile-menu.open { display: flex; }
 
+/* Guide cards */
+.guide-card { font-family: inherit; }
+
 /* FAQ markdown prose */
 .faq-prose strong { color: #fafafa; }
 .faq-prose code {
