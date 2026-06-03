@@ -657,6 +657,14 @@ function platformIcon(name) {
 // Download a file via fetch and trigger save with correct filename
 // This bypasses cross-origin `download` attribute limitations
 async function downloadBlossomFile(url, filename, btnId) {
+  // Only use fetch-based download for blossom URLs (hash-based paths)
+  // For external links (GitHub, etc.), just open them directly
+  const isBlossom = /\/[a-f0-9]{64}(\.[^/]*)?$/i.test(new URL(url, location.href).pathname);
+  if (!isBlossom) {
+    window.open(url, '_blank', 'noopener,noreferrer');
+    return;
+  }
+
   const btn = document.getElementById(btnId);
   if (!btn) return;
   const label = btn.querySelector('.dl-label');
