@@ -694,20 +694,26 @@ function renderDownloadContent(state) {
 
     const platformsHtml = build.platforms.map(p => {
       const icon = platformIcon(p.platform);
-      const filename = p.url.split('/').pop() || 'download';
+      // Build a proper download URL with extension so browsers save with the right file type
+      const ext = p.ext ? (p.ext.startsWith('.') ? p.ext : '.' + p.ext) : '';
+      const downloadUrl = ext && !p.url.match(/\.[a-z0-9]{1,10}$/i) ? p.url + ext : p.url;
+      const downloadName = `DEN-Chat-${build.version}-${p.platform.replace(/\s+/g, '-')}${ext}`;
       return `
-        <a href="${p.url}" download class="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-den-muted border border-den-border hover:border-den-muted-fg transition-colors no-underline group">
+        <a href="${downloadUrl}" download="${downloadName}" class="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-den-muted border border-den-border hover:border-den-muted-fg transition-colors no-underline group">
           <span class="text-den-primary shrink-0">${icon}</span>
           <span class="text-sm text-den-fg font-medium">${p.platform}</span>
-          <span class="text-xs text-den-muted-fg truncate flex-1 text-right group-hover:text-den-fg/60 transition-colors">${filename}</span>
+          <span class="text-xs text-den-muted-fg truncate flex-1 text-right group-hover:text-den-fg/60 transition-colors">${ext || p.url.split('/').pop() || 'download'}</span>
         </a>`;
     }).join('');
 
+    const srcExt = build.sourceExt ? (build.sourceExt.startsWith('.') ? build.sourceExt : '.' + build.sourceExt) : '';
+    const sourceDownloadUrl = srcExt && !build.sourceUrl.match(/\.[a-z0-9]{1,10}$/i) ? build.sourceUrl + srcExt : build.sourceUrl;
+    const sourceDownloadName = `DEN-Chat-${build.version}-source${srcExt}`;
     const sourceHtml = build.sourceUrl ? `
-      <a href="${build.sourceUrl}" download class="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-den-muted border border-den-border hover:border-den-muted-fg transition-colors no-underline group">
+      <a href="${sourceDownloadUrl}" download="${sourceDownloadName}" class="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-den-muted border border-den-border hover:border-den-muted-fg transition-colors no-underline group">
         <span class="text-den-muted-fg shrink-0">${platformIcon('source')}</span>
         <span class="text-sm text-den-fg font-medium">Source Code</span>
-        <span class="text-xs text-den-muted-fg truncate flex-1 text-right group-hover:text-den-fg/60 transition-colors">${build.sourceUrl.split('/').pop() || 'source'}</span>
+        <span class="text-xs text-den-muted-fg truncate flex-1 text-right group-hover:text-den-fg/60 transition-colors">${srcExt || build.sourceUrl.split('/').pop() || 'source'}</span>
       </a>` : '';
 
     return `
