@@ -654,6 +654,77 @@ function platformIcon(name) {
   return '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>';
 }
 
+// Download a file via fetch and trigger save with correct filename
+// This bypasses cross-origin `download` attribute limitations
+async function downloadBlossomFile(url, filename, btnId) {
+  const btn = document.getElementById(btnId);
+  if (!btn) return;
+  const label = btn.querySelector('.dl-label');
+  const origLabel = label ? label.textContent : '';
+
+  // Show downloading state
+  btn.disabled = true;
+  btn.style.opacity = '0.7';
+  btn.style.cursor = 'wait';
+  if (label) label.textContent = 'Downloading…';
+
+  try {
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+    // Track progress if content-length is available
+    const contentLength = response.headers.get('content-length');
+    const total = contentLength ? parseInt(contentLength, 10) : 0;
+
+    if (total > 0 && response.body) {
+      const reader = response.body.getReader();
+      const chunks = [];
+      let loaded = 0;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        chunks.push(value);
+        loaded += value.length;
+        const pct = Math.round((loaded / total) * 100);
+        if (label) label.textContent = `${pct}%`;
+      }
+
+      const blob = new Blob(chunks);
+      triggerBlobDownload(blob, filename);
+    } else {
+      // No content-length, just download the whole thing
+      const blob = await response.blob();
+      triggerBlobDownload(blob, filename);
+    }
+
+    // Success flash
+    if (label) label.textContent = '✓ Downloaded';
+    setTimeout(() => {
+      if (label) label.textContent = origLabel;
+      btn.disabled = false;
+      btn.style.opacity = '';
+      btn.style.cursor = '';
+    }, 2000);
+  } catch (err) {
+    if (label) label.textContent = 'Failed – click to retry';
+    btn.disabled = false;
+    btn.style.opacity = '';
+    btn.style.cursor = '';
+  }
+}
+
+function triggerBlobDownload(blob, filename) {
+  const blobUrl = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = blobUrl;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+}
+
 function renderDownloadContent(state) {
   const container = document.getElementById('download-modal-content');
   if (!container) return;
@@ -692,29 +763,30 @@ function renderDownloadContent(state) {
     const date = new Date(build.published_at * 1000);
     const dateStr = date.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
 
-    const platformsHtml = build.platforms.map(p => {
+    const platformsHtml = build.platforms.map((p, pi) => {
       const icon = platformIcon(p.platform);
-      // Build a proper download URL with extension so browsers save with the right file type
       const ext = p.ext ? (p.ext.startsWith('.') ? p.ext : '.' + p.ext) : '';
       const downloadUrl = ext && !p.url.match(/\.[a-z0-9]{1,10}$/i) ? p.url + ext : p.url;
       const downloadName = `DEN-Chat-${build.version}-${p.platform.replace(/\s+/g, '-')}${ext}`;
+      const btnId = `dl-plat-${idx}-${pi}`;
       return `
-        <a href="${downloadUrl}" download="${downloadName}" class="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-den-muted border border-den-border hover:border-den-muted-fg transition-colors no-underline group">
+        <button id="${btnId}" onclick="downloadBlossomFile('${downloadUrl}', '${downloadName}', '${btnId}')" class="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-den-muted border border-den-border hover:border-den-muted-fg transition-colors no-underline group w-full text-left cursor-pointer font-sans">
           <span class="text-den-primary shrink-0">${icon}</span>
           <span class="text-sm text-den-fg font-medium">${p.platform}</span>
-          <span class="text-xs text-den-muted-fg truncate flex-1 text-right group-hover:text-den-fg/60 transition-colors">${ext || p.url.split('/').pop() || 'download'}</span>
-        </a>`;
+          <span class="dl-label text-xs text-den-muted-fg truncate flex-1 text-right group-hover:text-den-fg/60 transition-colors">${ext || p.url.split('/').pop() || 'download'}</span>
+        </button>`;
     }).join('');
 
     const srcExt = build.sourceExt ? (build.sourceExt.startsWith('.') ? build.sourceExt : '.' + build.sourceExt) : '';
     const sourceDownloadUrl = srcExt && !build.sourceUrl.match(/\.[a-z0-9]{1,10}$/i) ? build.sourceUrl + srcExt : build.sourceUrl;
     const sourceDownloadName = `DEN-Chat-${build.version}-source${srcExt}`;
+    const srcBtnId = `dl-src-${idx}`;
     const sourceHtml = build.sourceUrl ? `
-      <a href="${sourceDownloadUrl}" download="${sourceDownloadName}" class="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-den-muted border border-den-border hover:border-den-muted-fg transition-colors no-underline group">
+      <button id="${srcBtnId}" onclick="downloadBlossomFile('${sourceDownloadUrl}', '${sourceDownloadName}', '${srcBtnId}')" class="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-den-muted border border-den-border hover:border-den-muted-fg transition-colors no-underline group w-full text-left cursor-pointer font-sans">
         <span class="text-den-muted-fg shrink-0">${platformIcon('source')}</span>
         <span class="text-sm text-den-fg font-medium">Source Code</span>
-        <span class="text-xs text-den-muted-fg truncate flex-1 text-right group-hover:text-den-fg/60 transition-colors">${srcExt || build.sourceUrl.split('/').pop() || 'source'}</span>
-      </a>` : '';
+        <span class="dl-label text-xs text-den-muted-fg truncate flex-1 text-right group-hover:text-den-fg/60 transition-colors">${srcExt || build.sourceUrl.split('/').pop() || 'source'}</span>
+      </button>` : '';
 
     return `
       <div class="rounded-xl border border-den-border overflow-hidden bg-den-surface">
