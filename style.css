@@ -97,3 +97,27 @@ html {
   border-top: 1px solid #262626;
   margin: 0.75rem 0;
 }
+
+/* Build/patch notes markdown prose */
+.build-notes ul { list-style: disc; padding-left: 1.25rem; margin: 0.4rem 0; }
+.build-notes ol { list-style: decimal; padding-left: 1.25rem; margin: 0.4rem 0; }
+.build-notes li { margin: 0.15rem 0; }
+.build-notes p { margin: 0.3rem 0; }
+.build-notes strong { color: #fafafa; }
+.build-notes h1, .build-notes h2, .build-notes h3, .build-notes h4 {
+  color: #fafafa;
+  font-weight: 600;
+  margin: 0.5rem 0 0.2rem;
+}
+.build-notes h1 { font-size: 1em; }
+.build-notes h2 { font-size: 0.95em; }
+.build-notes h3 { font-size: 0.9em; }
+.build-notes code {
+  background: rgba(255,255,255,0.06);
+  padding: 0.1em 0.35em;
+  border-radius: 3px;
+  font-size: 0.85em;
+  font-family: 'Fira Code', 'Consolas', monospace;
+}
+.build-notes a { color: #4B6BFF; text-decoration: underline; }
+.build-notes a:hover { color: #6983FF; }

@@ -809,7 +809,7 @@ function renderDownloadContent(state) {
         </button>
         ${isOpen ? `
           <div class="px-4 pb-4 space-y-2">
-            ${build.body ? `<p class="text-xs text-den-muted-fg leading-relaxed mb-3">${build.body}</p>` : ''}
+            ${build.body ? `<div class="build-notes text-xs text-den-muted-fg leading-relaxed mb-3">${typeof marked !== 'undefined' ? marked.parse(build.body) : build.body}</div>` : ''}
             ${platformsHtml}
             ${sourceHtml}
           </div>
