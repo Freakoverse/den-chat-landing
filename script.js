@@ -199,7 +199,7 @@ function fetchFaqFromNostr() {
     const finish = () => {
       if (resolved) return;
       resolved = true;
-      sockets.forEach(ws => { try { ws.close(); } catch {} });
+      sockets.forEach(ws => { try { ws.close(); } catch { } });
 
       if (!bestEvent || !bestEvent.content) {
         resolve([]);
@@ -250,7 +250,7 @@ function fetchFaqFromNostr() {
                 finish();
               }
             }
-          } catch {}
+          } catch { }
         };
 
         ws.onerror = () => {
@@ -517,7 +517,7 @@ function fetchNostrReplaceable(dTag) {
     const finish = () => {
       if (resolved) return;
       resolved = true;
-      sockets.forEach(ws => { try { ws.close(); } catch {} });
+      sockets.forEach(ws => { try { ws.close(); } catch { } });
       resolve(bestEvent);
     };
 
@@ -538,7 +538,7 @@ function fetchNostrReplaceable(dTag) {
               completedRelays++;
               if (completedRelays >= RELAYS.length) { clearTimeout(timeout); finish(); }
             }
-          } catch {}
+          } catch { }
         };
         ws.onerror = ws.onclose = () => {
           completedRelays++;
@@ -559,7 +559,7 @@ function fetchNostrEvents(filter) {
     const finish = () => {
       if (resolved) return;
       resolved = true;
-      sockets.forEach(ws => { try { ws.close(); } catch {} });
+      sockets.forEach(ws => { try { ws.close(); } catch { } });
       resolve(events);
     };
 
@@ -580,7 +580,7 @@ function fetchNostrEvents(filter) {
               completedRelays++;
               if (completedRelays >= RELAYS.length) { clearTimeout(timeout); finish(); }
             }
-          } catch {}
+          } catch { }
         };
         ws.onerror = ws.onclose = () => {
           completedRelays++;
@@ -808,7 +808,7 @@ function renderDownloadContent(state) {
           </svg>
         </button>
         ${isOpen ? `
-          <div class="px-4 pb-4 space-y-2">
+          <div class="px-4 py-4 space-y-2">
             ${build.body ? `<div class="build-notes text-xs text-den-muted-fg leading-relaxed mb-3">${typeof marked !== 'undefined' ? marked.parse(build.body) : build.body}</div>` : ''}
             ${platformsHtml}
             ${sourceHtml}
@@ -850,7 +850,7 @@ function fetchBuildsFromNostr() {
     const finish = () => {
       if (resolved) return;
       resolved = true;
-      sockets.forEach(ws => { try { ws.close(); } catch {} });
+      sockets.forEach(ws => { try { ws.close(); } catch { } });
 
       const builds = [];
       for (const ev of events.values()) {
@@ -876,7 +876,7 @@ function fetchBuildsFromNostr() {
               created_at: ev.created_at,
             });
           }
-        } catch {}
+        } catch { }
       }
       builds.sort((a, b) => b.published_at - a.published_at);
       // Auto-open latest build
@@ -910,7 +910,7 @@ function fetchBuildsFromNostr() {
                 finish();
               }
             }
-          } catch {}
+          } catch { }
         };
 
         ws.onerror = () => {
