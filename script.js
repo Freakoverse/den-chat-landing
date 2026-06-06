@@ -4,6 +4,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initMobileNav();
   initFaq();
   initGuides();
+  initAbout();
 });
 
 // ── Mobile Navigation ──
@@ -31,6 +32,8 @@ function initMobileNav() {
 // ── Nostr Config ──
 
 const ADMIN_PUBKEY = '3fc9e080c2dd77b21c6dafb0d5fabdbe2aaa90b43357f2afcccd8fef7bf43021';
+const FREEDEN_PUBKEY = '3fc9e08185bb76c87836bec1abd7dbf155548258356bf2af99b27dee7fa18042';
+const FREEDEN_NPUB = 'npub18ly7pqxzm4mmy8rd47cdt74ahc424y95xdtl9t7vek8777l5xqss3pttwf';
 const RELAYS = ['wss://relay.damus.io', 'wss://relay.primal.net', 'wss://nos.lol'];
 
 // ── FAQ ──
@@ -797,7 +800,7 @@ function renderDownloadContent(state) {
       </button>` : '';
 
     return `
-      <div class="rounded-xl border border-den-border overflow-hidden bg-den-surface">
+      <div class="rounded-xl border border-den-border overflow-auto bg-den-surface">
         <button onclick="toggleBuild(${idx})" class="flex items-center justify-between w-full px-4 py-3 text-left cursor-pointer hover:bg-den-muted/50 transition-colors bg-transparent border-none font-sans">
           <div class="flex items-center gap-3 pr-4">
             <span class="text-sm font-semibold text-den-fg">${build.version}</span>
@@ -934,4 +937,303 @@ function fetchBuildsFromNostr() {
       }
     }
   });
+}
+
+// ── About / Freeden Profile ──
+
+function initAbout() {
+  fetchProfile(FREEDEN_PUBKEY).then(profile => {
+    if (!profile) return;
+    if (profile.picture) {
+      const container = document.getElementById('freeden-avatar');
+      if (container) {
+        const img = document.createElement('img');
+        img.src = profile.picture;
+        img.alt = profile.display_name || profile.name || 'Freeden';
+        img.className = 'w-full h-full object-cover';
+        img.onerror = () => { img.style.display = 'none'; };
+        container.innerHTML = '';
+        container.appendChild(img);
+      }
+    }
+    if (profile.display_name || profile.name) {
+      const nameEl = document.getElementById('freeden-name');
+      if (nameEl) nameEl.textContent = profile.display_name || profile.name;
+    }
+  }).catch(() => { /* keep placeholder */ });
+
+  // Also load sponsors
+  initSponsors();
+}
+
+function fetchProfile(pubkey) {
+  return new Promise((resolve) => {
+    const filter = { authors: [pubkey], kinds: [0], limit: 1 };
+    let bestEvent = null;
+    let resolved = false;
+    let completedRelays = 0;
+    const sockets = [];
+
+    const finish = () => {
+      if (resolved) return;
+      resolved = true;
+      sockets.forEach(ws => { try { ws.close(); } catch { } });
+      if (!bestEvent || !bestEvent.content) { resolve(null); return; }
+      try { resolve(JSON.parse(bestEvent.content)); }
+      catch { resolve(null); }
+    };
+
+    const timeout = setTimeout(finish, 6000);
+
+    for (const relay of RELAYS) {
+      try {
+        const ws = new WebSocket(relay);
+        sockets.push(ws);
+
+        ws.onopen = () => {
+          ws.send(JSON.stringify(['REQ', 'prof_' + Math.random().toString(36).slice(2, 8), filter]));
+        };
+
+        ws.onmessage = (msg) => {
+          try {
+            const data = JSON.parse(msg.data);
+            if (data[0] === 'EVENT' && data[2]) {
+              const ev = data[2];
+              if (!bestEvent || ev.created_at > bestEvent.created_at) bestEvent = ev;
+            }
+            if (data[0] === 'EOSE') {
+              completedRelays++;
+              if (completedRelays >= RELAYS.length) { clearTimeout(timeout); finish(); }
+            }
+          } catch { }
+        };
+
+        ws.onerror = () => {
+          completedRelays++;
+          if (completedRelays >= RELAYS.length && !resolved) { clearTimeout(timeout); finish(); }
+        };
+
+        ws.onclose = () => {
+          completedRelays++;
+          if (completedRelays >= RELAYS.length && !resolved) { clearTimeout(timeout); finish(); }
+        };
+      } catch {
+        completedRelays++;
+      }
+    }
+  });
+}
+
+function copyNpub() {
+  navigator.clipboard.writeText(FREEDEN_NPUB).then(() => {
+    const btn = document.getElementById('freeden-copy-btn');
+    if (!btn) return;
+    btn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`;
+    btn.classList.add('text-green-400');
+    setTimeout(() => {
+      btn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>`;
+      btn.classList.remove('text-green-400');
+    }, 1500);
+  }).catch(() => { });
+}
+
+// ── Sponsors ──
+
+const SPONSOR_TIER_CONFIG = {
+  mythic: { label: 'Mythic', cardW: 'w-52', cardH: 'h-32', logoSize: 'w-10 h-10', hoverBorder: 'hover:border-orange-500/40', textSize: 'text-xs' },
+  legendary: { label: 'Legendary', cardW: 'w-48', cardH: 'h-28', logoSize: 'w-9 h-9', hoverBorder: 'hover:border-amber-500/40', textSize: 'text-xs' },
+  epic: { label: 'Epic', cardW: 'w-40', cardH: 'h-24', logoSize: 'w-8 h-8', hoverBorder: 'hover:border-purple-500/40', textSize: 'text-[11px]' },
+  rare: { label: 'Rare', cardW: 'w-36', cardH: 'h-20', logoSize: 'w-7 h-7', hoverBorder: 'hover:border-blue-500/40', textSize: 'text-[11px]' },
+  common: { label: 'Common', cardW: '', cardH: '', logoSize: '', hoverBorder: '', textSize: '' },
+};
+
+const DEN_LOGO_PATH = 'm907.73 888.19c-14.57 30.37-89.83 51.72-189.76 64.06 5.85-16.56 10.77-34.19 14.66-52.85l-110.69-249.99-44.5 49.32-87.19-156.39-87.19 156.39-44.5-49.32-110.94 250.31c3.89 18.59 8.8 36.14 14.63 52.64-100.38-12.32-176.05-33.71-190.67-64.17-24.45-50.96-43.84-108.37-57.13-171.91l217.42-490.57 65.58 75.02 192.52-284.86 192.52 284.86 65.57-75.02 216.94 489.95c-13.3 63.79-32.74 121.41-57.27 172.53z';
+
+let currentSponsorsYear = new Date().getFullYear();
+const MIN_SPONSORS_YEAR = 2026;
+const MAX_SPONSORS_YEAR = new Date().getFullYear();
+
+function initSponsors() {
+  currentSponsorsYear = MAX_SPONSORS_YEAR;
+  updateSponsorsYearUI();
+  loadSponsorsForYear(currentSponsorsYear);
+}
+
+function updateSponsorsYearUI() {
+  const label = document.getElementById('sponsors-year-label');
+  const prevBtn = document.getElementById('sponsors-year-prev');
+  const nextBtn = document.getElementById('sponsors-year-next');
+  if (label) label.textContent = String(currentSponsorsYear);
+  if (prevBtn) prevBtn.disabled = currentSponsorsYear <= MIN_SPONSORS_YEAR;
+  if (nextBtn) nextBtn.disabled = currentSponsorsYear >= MAX_SPONSORS_YEAR;
+}
+
+function changeSponsorsYear(delta) {
+  const newYear = currentSponsorsYear + delta;
+  if (newYear < MIN_SPONSORS_YEAR || newYear > MAX_SPONSORS_YEAR) return;
+  currentSponsorsYear = newYear;
+  updateSponsorsYearUI();
+
+  // Show loading skeleton again
+  const section = document.getElementById('sponsors');
+  if (section) section.style.display = '';
+  const loadingEl = document.getElementById('sponsors-loading');
+  if (!loadingEl) {
+    // Re-create the skeleton
+    const mythicWrap = document.getElementById('sponsors-wrap-mythic');
+    if (mythicWrap) {
+      const skel = document.createElement('div');
+      skel.id = 'sponsors-loading';
+      skel.className = 'space-y-6';
+      skel.innerHTML = '<div class="flex items-start gap-4"><div class="w-52 h-32 rounded-xl bg-den-muted/30 animate-pulse"></div><div class="w-52 h-32 rounded-xl bg-den-muted/20 animate-pulse" style="animation-delay:.15s"></div></div>';
+      mythicWrap.parentNode.insertBefore(skel, mythicWrap);
+    }
+  }
+
+  loadSponsorsForYear(currentSponsorsYear);
+}
+
+function loadSponsorsForYear(year) {
+  const dTag = 'den-sponsors-' + year;
+  fetchSponsorData(dTag).then(data => {
+    renderSponsors(data);
+  }).catch(() => {
+    renderSponsors(null);
+  });
+}
+
+function fetchSponsorData(dTag) {
+  return new Promise((resolve, reject) => {
+    const filter = { authors: [ADMIN_PUBKEY], kinds: [30078], '#d': [dTag] };
+    let bestEvent = null;
+    let resolved = false;
+    let completedRelays = 0;
+    const sockets = [];
+
+    const finish = () => {
+      if (resolved) return;
+      resolved = true;
+      sockets.forEach(ws => { try { ws.close(); } catch { } });
+      if (!bestEvent || !bestEvent.content) { resolve(null); return; }
+      try { resolve(JSON.parse(bestEvent.content)); }
+      catch { resolve(null); }
+    };
+
+    const timeout = setTimeout(finish, 6000);
+
+    for (const relay of RELAYS) {
+      try {
+        const ws = new WebSocket(relay);
+        sockets.push(ws);
+        ws.onopen = () => {
+          ws.send(JSON.stringify(['REQ', 'spon_' + Math.random().toString(36).slice(2, 8), filter]));
+        };
+        ws.onmessage = (msg) => {
+          try {
+            const data = JSON.parse(msg.data);
+            if (data[0] === 'EVENT' && data[2]) {
+              if (!bestEvent || data[2].created_at > bestEvent.created_at) bestEvent = data[2];
+            }
+            if (data[0] === 'EOSE') {
+              completedRelays++;
+              if (completedRelays >= RELAYS.length) { clearTimeout(timeout); finish(); }
+            }
+          } catch { }
+        };
+        ws.onerror = () => {
+          completedRelays++;
+          if (completedRelays >= RELAYS.length && !resolved) { clearTimeout(timeout); finish(); }
+        };
+        ws.onclose = () => {
+          completedRelays++;
+          if (completedRelays >= RELAYS.length && !resolved) { clearTimeout(timeout); finish(); }
+        };
+      } catch { completedRelays++; }
+    }
+  });
+}
+
+function renderSponsors(data) {
+  const tiers = ['mythic', 'legendary', 'epic', 'rare', 'common'];
+  let anyVisible = false;
+
+  // Remove loading skeleton
+  const loader = document.getElementById('sponsors-loading');
+  if (loader) loader.remove();
+
+  for (const tier of tiers) {
+    const wrapper = document.getElementById('sponsors-wrap-' + tier);
+    const container = document.getElementById('sponsors-' + tier);
+    const anonEl = document.getElementById('sponsors-' + tier + '-anon');
+    if (!container || !wrapper) continue;
+
+    const cfg = SPONSOR_TIER_CONFIG[tier];
+    const tierData = data && data.tiers && data.tiers[tier] ? data.tiers[tier] : { sponsors: [], anonymous: 0 };
+    const sponsors = Array.isArray(tierData.sponsors) ? tierData.sponsors : [];
+    const anonCount = typeof tierData.anonymous === 'number' ? tierData.anonymous : 0;
+
+    // Hide if nothing in this tier
+    if (sponsors.length === 0 && anonCount === 0) {
+      wrapper.style.display = 'none';
+      continue;
+    }
+
+    wrapper.style.display = '';
+    anyVisible = true;
+    container.innerHTML = '';
+
+    if (tier === 'common') {
+      // Common: text links only
+      for (const s of sponsors) {
+        if (!s.name) continue;
+        if (s.link) {
+          const a = document.createElement('a');
+          a.href = s.link;
+          a.target = '_blank';
+          a.rel = 'noopener';
+          a.className = 'text-sm text-den-primary hover:text-den-primary-hover underline transition-colors';
+          a.textContent = s.name;
+          container.appendChild(a);
+        } else {
+          const span = document.createElement('span');
+          span.className = 'text-sm text-den-muted-fg';
+          span.textContent = s.name;
+          container.appendChild(span);
+        }
+      }
+    } else {
+      // Non-common: logo cards
+      for (const s of sponsors) {
+        const a = document.createElement('a');
+        a.href = s.link || '#sponsors';
+        if (s.link) { a.target = '_blank'; a.rel = 'noopener'; }
+        a.className = `${cfg.cardW} ${cfg.cardH} rounded-xl border border-den-border bg-den-muted/50 flex flex-col items-center justify-center gap-2 ${cfg.hoverBorder} transition-colors no-underline group overflow-hidden`;
+
+        if (s.logo) {
+          const img = document.createElement('img');
+          img.src = s.logo;
+          img.alt = s.name || '';
+          img.className = 'max-w-[80%] max-h-[60%] object-contain';
+          a.appendChild(img);
+        }
+        if (s.name) {
+          const label = document.createElement('span');
+          label.className = `${cfg.textSize} text-den-muted-fg font-medium text-center px-2 truncate w-full`;
+          label.textContent = s.name;
+          a.appendChild(label);
+        }
+        container.appendChild(a);
+      }
+    }
+
+    // Anonymous count
+    if (anonEl) {
+      if (anonCount > 0) {
+        anonEl.textContent = `Anonymous ${cfg.label} sponsors: ${anonCount}`;
+        anonEl.style.display = '';
+      } else {
+        anonEl.style.display = 'none';
+      }
+    }
+  }
 }

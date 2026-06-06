@@ -635,14 +635,126 @@
   </div>
   <!-- ═══ About ═══ -->
   <section id="about" class="py-24 md:py-28 px-6">
-    <div class="max-w-xl mx-auto text-center">
-      <h2 class="text-3xl md:text-4xl font-bold tracking-tight mb-3">About</h2>
-      <p class="text-base text-den-muted-fg leading-relaxed mb-4">DEN Chat is built by
+    <div class="max-w-2xl mx-auto">
+      <h2 class="text-3xl md:text-4xl font-bold tracking-tight mb-3 text-center">About</h2>
+      <p class="text-base text-den-muted-fg leading-relaxed mb-4 text-center">DEN Chat is built by
         <strong class="text-den-fg">Freeden</strong> (Free Developer Network), a developer effort dedicated to
         increasing freedoms through technology.
       </p>
-      <p class="text-base text-den-muted-fg leading-relaxed">Freeden produces various open-source projects with a
+      <p class="text-base text-den-muted-fg leading-relaxed mb-10 text-center">Freeden produces various open-source projects with a
         single goal: building tools that respect privacy, ownership, and freedom without compromise.</p>
+
+      <!-- Freeden profile card -->
+      <div class="bg-den-muted border border-den-border rounded-xl p-6 flex items-center gap-5">
+        <div class="shrink-0">
+          <div id="freeden-avatar" class="w-16 h-16 rounded-full bg-den-border/50 flex items-center justify-center overflow-hidden">
+            <!-- Placeholder SVG until profile loads -->
+            <svg viewBox="0 0 980 980" class="w-9 h-9 opacity-20">
+              <path fill="#a1a1aa" fill-rule="evenodd" d="m907.73 888.19c-14.57 30.37-89.83 51.72-189.76 64.06 5.85-16.56 10.77-34.19 14.66-52.85l-110.69-249.99-44.5 49.32-87.19-156.39-87.19 156.39-44.5-49.32-110.94 250.31c3.89 18.59 8.8 36.14 14.63 52.64-100.38-12.32-176.05-33.71-190.67-64.17-24.45-50.96-43.84-108.37-57.13-171.91l217.42-490.57 65.58 75.02 192.52-284.86 192.52 284.86 65.57-75.02 216.94 489.95c-13.3 63.79-32.74 121.41-57.27 172.53z"/>
+            </svg>
+          </div>
+        </div>
+        <div class="flex-1 min-w-0">
+          <p id="freeden-name" class="text-base font-semibold text-den-fg mb-1">Freeden</p>
+          <div class="flex items-center gap-2">
+            <code id="freeden-npub" class="text-[11px] text-den-muted-fg font-mono truncate select-all">npub18ly7pqxzm4mmy8rd47cdt74ahc424y95xdtl9t7vek8777l5xqss3pttwf</code>
+            <button onclick="copyNpub()" id="freeden-copy-btn"
+              class="shrink-0 w-7 h-7 flex items-center justify-center rounded-md bg-den-border/50 hover:bg-den-primary/20 text-den-muted-fg hover:text-den-primary transition-colors cursor-pointer border-none"
+              title="Copy npub">
+              <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none"
+                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect width="14" height="14" x="8" y="8" rx="2" ry="2"/>
+                <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ Sponsors ═══ -->
+  <section id="sponsors" class="bg-den-surface py-24 md:py-28 px-6">
+    <div class="max-w-5xl mx-auto">
+      <h2 class="text-3xl md:text-4xl font-bold tracking-tight mb-3">Sponsors</h2>
+      <p class="text-[17px] text-den-muted-fg max-w-xl mb-8 leading-relaxed">The organizations and individuals who make this project possible.</p>
+
+      <!-- Year selector -->
+      <div class="flex items-center gap-3 mb-10">
+        <button id="sponsors-year-prev" onclick="changeSponsorsYear(-1)"
+          class="w-7 h-7 flex items-center justify-center rounded-md bg-den-muted/50 text-den-muted-fg hover:text-den-fg hover:bg-den-muted transition-colors cursor-pointer border-none disabled:opacity-30 disabled:cursor-not-allowed">
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="m15 18-6-6 6-6"/>
+          </svg>
+        </button>
+        <span id="sponsors-year-label" class="text-sm font-semibold text-den-fg tabular-nums"></span>
+        <button id="sponsors-year-next" onclick="changeSponsorsYear(1)"
+          class="w-7 h-7 flex items-center justify-center rounded-md bg-den-muted/50 text-den-muted-fg hover:text-den-fg hover:bg-den-muted transition-colors cursor-pointer border-none disabled:opacity-30 disabled:cursor-not-allowed">
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="m9 18 6-6-6-6"/>
+          </svg>
+        </button>
+      </div>
+
+      <!-- Loading skeleton -->
+      <div id="sponsors-loading" class="space-y-6">
+        <div class="flex items-start gap-4">
+          <div class="w-52 h-32 rounded-xl bg-den-muted/30 animate-pulse"></div>
+          <div class="w-52 h-32 rounded-xl bg-den-muted/20 animate-pulse" style="animation-delay:.15s"></div>
+        </div>
+      </div>
+
+      <!-- Mythic -->
+      <div id="sponsors-wrap-mythic" class="mb-14" style="display:none">
+        <div class="flex items-center gap-2 mb-1">
+          <span class="text-xl font-bold bg-gradient-to-r from-red-500 via-orange-400 to-yellow-400 bg-clip-text text-transparent">Mythic</span>
+        </div>
+        <p class="text-xs text-den-muted-fg mb-5">$100k/yr or 1 BTC/yr</p>
+        <div id="sponsors-mythic" class="flex flex-wrap items-start gap-4"></div>
+        <p id="sponsors-mythic-anon" class="text-xs text-den-muted-fg/50 mt-3"></p>
+      </div>
+
+      <!-- Legendary -->
+      <div id="sponsors-wrap-legendary" class="mb-14" style="display:none">
+        <div class="flex items-center gap-2 mb-1">
+          <span class="text-xl font-bold bg-gradient-to-r from-amber-400 to-yellow-300 bg-clip-text text-transparent">Legendary</span>
+        </div>
+        <p class="text-xs text-den-muted-fg mb-5">$50k/yr or 0.5 BTC/yr</p>
+        <div id="sponsors-legendary" class="flex flex-wrap items-start gap-4"></div>
+        <p id="sponsors-legendary-anon" class="text-xs text-den-muted-fg/50 mt-3"></p>
+      </div>
+
+      <!-- Epic -->
+      <div id="sponsors-wrap-epic" class="mb-14" style="display:none">
+        <div class="flex items-center gap-2 mb-1">
+          <span class="text-xl font-bold text-purple-400">Epic</span>
+        </div>
+        <p class="text-xs text-den-muted-fg mb-5">$10k/yr or 0.1 BTC/yr</p>
+        <div id="sponsors-epic" class="flex flex-wrap items-start gap-4"></div>
+        <p id="sponsors-epic-anon" class="text-xs text-den-muted-fg/50 mt-3"></p>
+      </div>
+
+      <!-- Rare -->
+      <div id="sponsors-wrap-rare" class="mb-14" style="display:none">
+        <div class="flex items-center gap-2 mb-1">
+          <span class="text-xl font-bold text-blue-400">Rare</span>
+        </div>
+        <p class="text-xs text-den-muted-fg mb-5">$3k/yr or 0.03 BTC/yr</p>
+        <div id="sponsors-rare" class="flex flex-wrap items-start gap-4"></div>
+        <p id="sponsors-rare-anon" class="text-xs text-den-muted-fg/50 mt-3"></p>
+      </div>
+
+      <!-- Common (text links only) -->
+      <div id="sponsors-wrap-common" style="display:none">
+        <div class="flex items-center gap-2 mb-1">
+          <span class="text-lg font-bold text-den-muted-fg">Common</span>
+        </div>
+        <p class="text-xs text-den-muted-fg mb-4">$1k/yr or 0.01 BTC/yr</p>
+        <div id="sponsors-common" class="flex flex-wrap items-start gap-3"></div>
+        <p id="sponsors-common-anon" class="text-xs text-den-muted-fg/50 mt-3"></p>
+      </div>
     </div>
   </section>
 
@@ -701,7 +813,7 @@
           </svg>
         </button>
       </div>
-      <div id="download-modal-content" class="px-6 py-5 overflow-y-auto flex flex-col gap-1.5"></div>
+      <div id="download-modal-content" class="px-6 py-5 overflow-y-auto flex flex-col gap-1.5 min-h-0 flex-1"></div>
     </div>
   </div>
 
