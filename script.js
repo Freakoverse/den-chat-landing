@@ -1685,7 +1685,12 @@ function renderHubPage(hub, creatorProfile, naddr) {
 function openInDenChat(naddr) {
   const protocolUrl = 'denchat://hub/' + naddr;
 
-  // Create hidden iframe to attempt protocol launch
+  // Track if the browser loses focus — means the OS found the app
+  let appLaunched = false;
+  const onBlur = () => { appLaunched = true; };
+  window.addEventListener('blur', onBlur);
+
+  // Attempt protocol launch via hidden iframe
   const iframe = document.createElement('iframe');
   iframe.style.display = 'none';
   iframe.src = protocolUrl;
@@ -1694,15 +1699,16 @@ function openInDenChat(naddr) {
     try { document.body.removeChild(iframe); } catch { }
   }, 2000);
 
-  // If still visible after 1.5s, app probably isn't installed
+  // Check after 2.5s — if the window never lost focus & is still visible, app probably isn't installed
   const msgEl = document.getElementById('hub-deeplink-msg');
   if (msgEl) {
     setTimeout(() => {
-      if (!document.hidden) {
+      window.removeEventListener('blur', onBlur);
+      if (!appLaunched && !document.hidden) {
         msgEl.classList.remove('hidden');
         msgEl.innerHTML = 'DEN Chat doesn\'t seem to be installed. <a href="#" onclick="event.preventDefault();closeCreatorModal();openDownloadModal()" class="text-den-primary hover:text-den-primary-hover underline">Download it here</a>.';
       }
-    }, 1500);
+    }, 2500);
   }
 }
 
