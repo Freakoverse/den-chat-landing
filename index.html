@@ -103,6 +103,27 @@
     </div>
   </nav>
 
+  <!-- ═══ Hub Page (hidden by default, shown when hash matches #hub/naddr...) ═══ -->
+  <div id="hub-page" class="hidden min-h-screen pt-20">
+    <div id="hub-page-content"></div>
+  </div>
+
+  <!-- ═══ Creator Profile Modal ═══ -->
+  <div id="creator-modal" class="fixed inset-0 z-[100] hidden items-center justify-center">
+    <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" onclick="closeCreatorModal()"></div>
+    <div class="relative w-full max-w-md mx-4 bg-den-bg border border-den-border rounded-2xl shadow-2xl max-h-[85vh] overflow-hidden flex flex-col">
+      <div class="flex items-center justify-between px-6 py-4 border-b border-den-border shrink-0">
+        <h3 class="text-lg font-semibold">Profile</h3>
+        <button onclick="closeCreatorModal()" class="w-8 h-8 flex items-center justify-center rounded-lg text-den-muted-fg hover:text-den-fg hover:bg-den-muted transition-colors cursor-pointer bg-transparent border-none shrink-0">
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+        </button>
+      </div>
+      <div id="creator-modal-content" class="overflow-y-auto flex-1"></div>
+    </div>
+  </div>
+
+  <div id="landing-content">
+
   <!-- ═══ Hero ═══ -->
   <section class="min-h-screen flex items-center justify-center px-6 pt-28 pb-20 text-center">
     <div>
@@ -796,6 +817,8 @@
       </div>
     </div>
   </section>
+
+  </div><!-- /landing-content -->
 
   <!-- ═══ Download Modal ═══ -->
   <div id="download-modal" class="fixed inset-0 z-[100] hidden items-center justify-center">

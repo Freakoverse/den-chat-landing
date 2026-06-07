@@ -1237,3 +1237,582 @@ function renderSponsors(data) {
     }
   }
 }
+
+// ══════════════════════════════════════════════════════════════════════════════
+// ── Hub Detail Page ──
+// ══════════════════════════════════════════════════════════════════════════════
+
+// ── Bech32 / naddr Decoder ──
+
+const BECH32_CHARSET = 'qpzry9x8gf2tvdw0s3jn54khce6mua7l';
+
+function bech32Polymod(values) {
+  const GEN = [0x3b6a57b2, 0x26508e6d, 0x1ea119fa, 0x3d4233dd, 0x2a1462b3];
+  let chk = 1;
+  for (const v of values) {
+    const b = chk >>> 25;
+    chk = ((chk & 0x1ffffff) << 5) ^ v;
+    for (let i = 0; i < 5; i++) {
+      if ((b >>> i) & 1) chk ^= GEN[i];
+    }
+  }
+  return chk;
+}
+
+function bech32HrpExpand(hrp) {
+  const ret = [];
+  for (let i = 0; i < hrp.length; i++) ret.push(hrp.charCodeAt(i) >>> 5);
+  ret.push(0);
+  for (let i = 0; i < hrp.length; i++) ret.push(hrp.charCodeAt(i) & 31);
+  return ret;
+}
+
+function bech32Decode(str) {
+  str = str.toLowerCase();
+  const pos = str.lastIndexOf('1');
+  if (pos < 1 || pos + 7 > str.length) return null;
+  const hrp = str.slice(0, pos);
+  const dataChars = str.slice(pos + 1);
+  const data = [];
+  for (const c of dataChars) {
+    const idx = BECH32_CHARSET.indexOf(c);
+    if (idx === -1) return null;
+    data.push(idx);
+  }
+  if (bech32Polymod(bech32HrpExpand(hrp).concat(data)) !== 1) return null;
+  return { prefix: hrp, words: data.slice(0, data.length - 6) };
+}
+
+function convertBits(data, fromBits, toBits, pad) {
+  let acc = 0;
+  let bits = 0;
+  const maxv = (1 << toBits) - 1;
+  const ret = [];
+  for (const value of data) {
+    if (value < 0 || value >>> fromBits !== 0) return null;
+    acc = (acc << fromBits) | value;
+    bits += fromBits;
+    while (bits >= toBits) {
+      bits -= toBits;
+      ret.push((acc >>> bits) & maxv);
+    }
+  }
+  if (pad) {
+    if (bits > 0) ret.push((acc << (toBits - bits)) & maxv);
+  } else if (bits >= fromBits || ((acc << (toBits - bits)) & maxv)) {
+    return null;
+  }
+  return ret;
+}
+
+function decodeNaddr(naddr) {
+  const decoded = bech32Decode(naddr);
+  if (!decoded || decoded.prefix !== 'naddr') return null;
+  const bytes = convertBits(decoded.words, 5, 8, false);
+  if (!bytes) return null;
+
+  let identifier = '';
+  const relays = [];
+  let pubkey = '';
+  let kind = null;
+  let i = 0;
+
+  while (i < bytes.length) {
+    const type = bytes[i];
+    const len = bytes[i + 1];
+    if (len === undefined) break;
+    const value = bytes.slice(i + 2, i + 2 + len);
+    i += 2 + len;
+
+    if (type === 0) {
+      // Special: identifier (d-tag) — UTF-8 string
+      identifier = String.fromCharCode(...value);
+    } else if (type === 1) {
+      // Relay URL — UTF-8 string
+      relays.push(String.fromCharCode(...value));
+    } else if (type === 2) {
+      // Author pubkey — 32 bytes hex
+      pubkey = Array.from(value).map(b => b.toString(16).padStart(2, '0')).join('');
+    } else if (type === 3) {
+      // Kind — 4 bytes big-endian uint32
+      kind = (value[0] << 24) | (value[1] << 16) | (value[2] << 8) | value[3];
+    }
+  }
+
+  return { identifier, relays, pubkey, kind };
+}
+
+// ── Bech32 Encoding (for npub) ──
+
+function bech32Encode(hrp, words) {
+  const checksummed = words.concat(bech32CreateChecksum(hrp, words));
+  let result = hrp + '1';
+  for (const w of checksummed) result += BECH32_CHARSET.charAt(w);
+  return result;
+}
+
+function bech32CreateChecksum(hrp, data) {
+  const values = bech32HrpExpand(hrp).concat(data).concat([0, 0, 0, 0, 0, 0]);
+  const mod = bech32Polymod(values) ^ 1;
+  const ret = [];
+  for (let i = 0; i < 6; i++) ret.push((mod >>> (5 * (5 - i))) & 31);
+  return ret;
+}
+
+function hexToNpub(hex) {
+  const bytes = [];
+  for (let i = 0; i < hex.length; i += 2) {
+    bytes.push(parseInt(hex.substring(i, i + 2), 16));
+  }
+  const words = convertBits(bytes, 8, 5, true);
+  if (!words) return hex;
+  return bech32Encode('npub', words);
+}
+
+// ── Route Detection ──
+
+let creatorModalOpen = false;
+
+window.addEventListener('DOMContentLoaded', () => {
+  checkHubRoute();
+});
+window.addEventListener('hashchange', () => {
+  checkHubRoute();
+});
+
+function checkHubRoute() {
+  const hash = window.location.hash;
+  const hubPage = document.getElementById('hub-page');
+  const landing = document.getElementById('landing-content');
+  if (!hubPage || !landing) return;
+
+  const match = hash.match(/^#hub\/(naddr1\S+)$/);
+  if (match) {
+    landing.style.display = 'none';
+    hubPage.classList.remove('hidden');
+    window.scrollTo(0, 0);
+    loadHubPage(match[1]);
+  } else {
+    hubPage.classList.add('hidden');
+    landing.style.display = '';
+    document.title = 'DEN Chat - Free your chat';
+  }
+}
+
+// ── Hub Event Fetching ──
+
+function fetchHubEvent(pubkey, dTag, relayHints) {
+  return new Promise((resolve) => {
+    const filter = { kinds: [36942], authors: [pubkey], '#d': [dTag] };
+
+    // Combine relay hints with default relays, deduplicated
+    const allRelays = [...new Set([...(relayHints || []), ...RELAYS])];
+
+    let bestEvent = null;
+    let resolved = false;
+    let completedRelays = 0;
+    const totalRelays = allRelays.length;
+    const sockets = [];
+
+    const finish = () => {
+      if (resolved) return;
+      resolved = true;
+      sockets.forEach(ws => { try { ws.close(); } catch { } });
+
+      if (!bestEvent) { resolve(null); return; }
+
+      // Parse hub event into hub object
+      const getTag = (name) => bestEvent.tags.find(t => t[0] === name)?.[1] || '';
+      const getTags = (name) => bestEvent.tags.filter(t => t[0] === name).map(t => t[1]);
+
+      let settings = {};
+      try { settings = JSON.parse(bestEvent.content) || {}; } catch { }
+
+      const hub = {
+        name: getTag('n') || getTag('name') || 'Unnamed Hub',
+        tags: getTags('t'),
+        minPow: parseInt(getTag('w')) || 0,
+        epoch: getTag('epoch') || '',
+        nsfw: bestEvent.tags.some(t => t[0] === 'content-warning'),
+        discoverable: getTag('f') || '',
+        publishedAt: parseInt(getTag('published_at')) || bestEvent.created_at,
+        description: settings.description || (typeof settings.settings === 'object' ? settings.settings.description : '') || '',
+        icon: settings.icon || (typeof settings.settings === 'object' ? settings.settings.icon : '') || '',
+        banner: settings.banner || (typeof settings.settings === 'object' ? settings.settings.banner : '') || '',
+        channels: Array.isArray(settings.channels) ? settings.channels : [],
+        roles: Array.isArray(settings.roles) ? settings.roles : [],
+        categories: Array.isArray(settings.categories) ? settings.categories : [],
+        creatorPubkey: bestEvent.pubkey,
+        dTag: getTag('d'),
+      };
+
+      resolve(hub);
+    };
+
+    const timeout = setTimeout(finish, 10000);
+
+    for (const relay of allRelays) {
+      try {
+        const ws = new WebSocket(relay);
+        sockets.push(ws);
+
+        ws.onopen = () => {
+          const subId = 'hub_' + Math.random().toString(36).slice(2, 8);
+          ws.send(JSON.stringify(['REQ', subId, filter]));
+        };
+
+        ws.onmessage = (msg) => {
+          try {
+            const data = JSON.parse(msg.data);
+            if (data[0] === 'EVENT' && data[2]) {
+              const ev = data[2];
+              if (!bestEvent || ev.created_at > bestEvent.created_at) bestEvent = ev;
+            }
+            if (data[0] === 'EOSE') {
+              completedRelays++;
+              if (completedRelays >= totalRelays) { clearTimeout(timeout); finish(); }
+            }
+          } catch { }
+        };
+
+        ws.onerror = () => {
+          completedRelays++;
+          if (completedRelays >= totalRelays && !resolved) { clearTimeout(timeout); finish(); }
+        };
+
+        ws.onclose = () => {
+          completedRelays++;
+          if (completedRelays >= totalRelays && !resolved) { clearTimeout(timeout); finish(); }
+        };
+      } catch {
+        completedRelays++;
+      }
+    }
+  });
+}
+
+// ── Hub Page Loading ──
+
+async function loadHubPage(naddr) {
+  const container = document.getElementById('hub-page-content');
+  if (!container) return;
+
+  // Show loading skeleton
+  container.innerHTML = `
+    <div class="animate-pulse">
+      <div class="w-full h-[280px] bg-den-muted/30 rounded-b-xl"></div>
+      <div class="max-w-2xl mx-auto px-6 mt-6">
+        <div class="flex items-center gap-4 mb-6">
+          <div class="w-20 h-20 rounded-2xl bg-den-muted/50"></div>
+          <div class="flex-1 space-y-3">
+            <div class="h-6 bg-den-muted/50 rounded w-48"></div>
+            <div class="h-4 bg-den-muted/30 rounded w-32"></div>
+          </div>
+        </div>
+        <div class="space-y-3 mb-6">
+          <div class="h-4 bg-den-muted/30 rounded w-full"></div>
+          <div class="h-4 bg-den-muted/30 rounded w-3/4"></div>
+        </div>
+        <div class="h-24 bg-den-muted/20 rounded-xl mb-6"></div>
+        <div class="h-12 bg-den-primary/20 rounded-lg w-full mb-3"></div>
+        <div class="h-12 bg-den-muted/20 rounded-lg w-full"></div>
+      </div>
+    </div>`;
+
+  // Decode naddr
+  const decoded = decodeNaddr(naddr);
+  if (!decoded) {
+    renderHubError(container, 'Invalid hub address.', naddr);
+    return;
+  }
+
+  if (decoded.kind !== 36942) {
+    renderHubError(container, 'Invalid hub address — wrong event kind.', naddr);
+    return;
+  }
+
+  // Fetch hub event + creator profile in parallel
+  const [hub, creatorProfile] = await Promise.all([
+    fetchHubEvent(decoded.pubkey, decoded.identifier, decoded.relays),
+    fetchProfile(decoded.pubkey),
+  ]);
+
+  if (!hub) {
+    renderHubError(container, 'Hub not found. It may have been removed or the relays are unreachable.', naddr);
+    return;
+  }
+
+  renderHubPage(hub, creatorProfile, naddr);
+
+  // Update page title
+  document.title = hub.name + ' — DEN Chat Hub';
+}
+
+function renderHubError(container, message, naddr) {
+  container.innerHTML = `
+    <div class="max-w-2xl mx-auto px-6 py-20 text-center">
+      <div class="w-16 h-16 mx-auto mb-6 flex items-center justify-center rounded-2xl bg-red-500/10">
+        <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/></svg>
+      </div>
+      <h2 class="text-xl font-bold mb-2">Hub Not Found</h2>
+      <p class="text-den-muted-fg text-sm mb-8 max-w-md mx-auto">${message}</p>
+      <div class="flex flex-col items-center gap-3">
+        <button onclick="loadHubPage('${naddr}')" class="inline-flex items-center gap-2 px-6 py-3 bg-den-primary text-white text-sm font-semibold rounded-lg hover:bg-den-primary-hover transition-colors cursor-pointer border-none">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 16h5v5"/></svg>
+          Retry
+        </button>
+        <a href="#" onclick="window.location.hash='';return false;" class="text-sm text-den-muted-fg hover:text-den-fg transition-colors no-underline">← Back to DEN Chat</a>
+      </div>
+    </div>`;
+}
+
+// ── Hub Page Rendering ──
+
+function renderHubPage(hub, creatorProfile, naddr) {
+  const container = document.getElementById('hub-page-content');
+  if (!container) return;
+
+  const npub = hexToNpub(hub.creatorPubkey);
+  const npubShort = npub.slice(0, 12) + '…' + npub.slice(-6);
+  const creatorName = (creatorProfile && (creatorProfile.display_name || creatorProfile.name)) || npubShort;
+  const creatorAvatar = creatorProfile && creatorProfile.picture ? creatorProfile.picture : '';
+  const creatorNip05 = creatorProfile && creatorProfile.nip05 ? creatorProfile.nip05 : '';
+
+  // Banner
+  const bannerHtml = hub.banner
+    ? `<div class="relative w-full max-w-[720px] mx-auto h-[280px] overflow-hidden rounded-t-xl">
+        <img src="${hub.banner}" alt="Hub banner" class="w-full h-full object-cover" onerror="this.parentElement.innerHTML='<div class=\\'w-full h-full bg-gradient-to-b from-den-primary/20 to-den-bg\\'></div>'">
+        <div class="absolute inset-0 bg-gradient-to-t from-den-bg via-den-bg/40 to-transparent"></div>
+      </div>`
+    : `<div class="w-full max-w-[720px] mx-auto h-[280px] bg-gradient-to-b from-den-primary/20 to-den-bg rounded-t-xl"></div>`;
+
+  // Icon
+  const initials = hub.name.split(/\s+/).map(w => w[0]).join('').toUpperCase().slice(0, 2);
+  const iconHtml = hub.icon
+    ? `<img src="${hub.icon}" alt="${hub.name}" class="w-20 h-20 rounded-2xl object-cover border-4 border-den-bg -mt-10 relative z-10" onerror="this.outerHTML='<div class=\\'w-20 h-20 rounded-2xl bg-den-primary/20 flex items-center justify-center text-den-primary text-xl font-bold border-4 border-den-bg -mt-10 relative z-10\\'>${initials}</div>'">`
+    : `<div class="w-20 h-20 rounded-2xl bg-den-primary/20 flex items-center justify-center text-den-primary text-xl font-bold border-4 border-den-bg -mt-10 relative z-10">${initials}</div>`;
+
+  // NSFW badge
+  const nsfwBadge = hub.nsfw
+    ? `<span class="px-2 py-0.5 rounded-full bg-red-500/10 text-red-400 text-xs font-semibold">NSFW</span>`
+    : '';
+
+  // Tags
+  const tagsHtml = hub.tags.length > 0
+    ? `<div class="flex flex-wrap gap-1.5 mt-3">${hub.tags.map(t => `<span class="bg-den-primary/10 text-den-primary text-xs px-2 py-0.5 rounded-full">${t}</span>`).join('')}</div>`
+    : '';
+
+  // Stats line
+  const statsHtml = hub.minPow > 0
+    ? `<div class="flex items-center gap-1.5 text-sm text-den-muted-fg mt-4">
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M15 2v2"/><path d="M15 20v2"/><path d="M2 15h2"/><path d="M2 9h2"/><path d="M20 15h2"/><path d="M20 9h2"/><path d="M9 2v2"/><path d="M9 20v2"/></svg>
+        ${hub.minPow} processing
+      </div>`
+    : '';
+
+  // Creator card
+  const creatorAvatarHtml = creatorAvatar
+    ? `<img src="${creatorAvatar}" alt="${creatorName}" class="w-10 h-10 rounded-full object-cover shrink-0" onerror="this.outerHTML='<div class=\\'w-10 h-10 rounded-full bg-den-primary/20 flex items-center justify-center text-den-primary text-sm font-bold shrink-0\\'>${creatorName[0] || '?'}</div>'">`
+    : `<div class="w-10 h-10 rounded-full bg-den-primary/20 flex items-center justify-center text-den-primary text-sm font-bold shrink-0">${creatorName[0] || '?'}</div>`;
+
+  container.innerHTML = `
+    ${bannerHtml}
+    <div class="max-w-2xl mx-auto px-6 pb-16">
+      <!-- Icon + Name -->
+      <div class="flex items-start gap-4">
+        ${iconHtml}
+        <div class="pt-2 min-w-0 flex-1">
+          <div class="flex items-center gap-2 flex-wrap">
+            <h1 class="text-2xl font-bold truncate">${hub.name}</h1>
+            ${nsfwBadge}
+          </div>
+          <div class="text-sm text-den-muted-fg mt-0.5">by ${creatorName}</div>
+        </div>
+      </div>
+
+      ${tagsHtml}
+
+      <!-- Description -->
+      ${hub.description ? `<p class="text-sm text-den-muted-fg leading-relaxed mt-4">${hub.description}</p>` : ''}
+
+      ${statsHtml}
+
+      <!-- Creator Card -->
+      <div class="mt-6">
+        <button onclick="openCreatorModal()" id="hub-creator-card" class="w-full bg-den-muted border border-den-border rounded-xl p-4 flex items-center gap-3 text-left hover:border-den-muted-fg transition-colors cursor-pointer font-sans">
+          ${creatorAvatarHtml}
+          <div class="min-w-0 flex-1">
+            <div class="text-sm font-semibold text-den-fg">${creatorName}</div>
+            <div class="text-xs text-den-muted-fg truncate">${npubShort}</div>
+          </div>
+          <span onclick="event.stopPropagation();copyHubNpub()" id="hub-copy-npub" class="w-8 h-8 flex items-center justify-center rounded-lg text-den-muted-fg hover:text-den-fg hover:bg-den-border transition-colors cursor-pointer shrink-0" title="Copy npub">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
+          </span>
+        </button>
+      </div>
+
+      <!-- Action Buttons -->
+      <div class="mt-8 space-y-3">
+        <button onclick="openInDenChat('${naddr}')" class="w-full inline-flex items-center justify-center gap-2 px-7 py-3.5 bg-den-primary text-white text-[15px] font-semibold rounded-lg hover:bg-den-primary-hover transition-colors cursor-pointer border-none">
+          <svg viewBox="0 0 980 980" class="w-5 h-5"><path fill="currentColor" fill-rule="evenodd" d="${DEN_LOGO_PATH}"/></svg>
+          Open in DEN Chat
+        </button>
+        <div id="hub-deeplink-msg" class="hidden text-center text-sm text-den-muted-fg"></div>
+        <div class="flex items-center gap-3 my-1">
+          <div class="flex-1 border-t border-den-border"></div>
+          <span class="text-xs text-den-muted-fg">or</span>
+          <div class="flex-1 border-t border-den-border"></div>
+        </div>
+        <a href="https://web.denchat.top/#hub/${naddr}" target="_blank" rel="noopener" class="w-full inline-flex items-center justify-center gap-2 px-7 py-3.5 bg-transparent text-den-fg text-[15px] font-semibold rounded-lg border border-den-border hover:border-den-muted-fg transition-colors no-underline">
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+          Open in Web
+        </a>
+      </div>
+
+      <!-- Back link -->
+      <div class="mt-8 text-center">
+        <a href="#" onclick="window.location.hash='';return false;" class="text-sm text-den-muted-fg hover:text-den-fg transition-colors no-underline">← Back to DEN Chat</a>
+      </div>
+    </div>`;
+
+  // Store data for modal
+  window._hubCreatorProfile = creatorProfile;
+  window._hubCreatorPubkey = hub.creatorPubkey;
+}
+
+// ── Deep Link Helper ──
+
+function openInDenChat(naddr) {
+  const protocolUrl = 'denchat://hub/' + naddr;
+
+  // Create hidden iframe to attempt protocol launch
+  const iframe = document.createElement('iframe');
+  iframe.style.display = 'none';
+  iframe.src = protocolUrl;
+  document.body.appendChild(iframe);
+  setTimeout(() => {
+    try { document.body.removeChild(iframe); } catch { }
+  }, 2000);
+
+  // If still visible after 1.5s, app probably isn't installed
+  const msgEl = document.getElementById('hub-deeplink-msg');
+  if (msgEl) {
+    setTimeout(() => {
+      if (!document.hidden) {
+        msgEl.classList.remove('hidden');
+        msgEl.innerHTML = 'DEN Chat doesn\'t seem to be installed. <a href="#" onclick="event.preventDefault();closeCreatorModal();openDownloadModal()" class="text-den-primary hover:text-den-primary-hover underline">Download it here</a>.';
+      }
+    }, 1500);
+  }
+}
+
+// ── Copy Hub Creator npub ──
+
+function copyHubNpub() {
+  const pubkey = window._hubCreatorPubkey;
+  if (!pubkey) return;
+  const npub = hexToNpub(pubkey);
+  navigator.clipboard.writeText(npub).then(() => {
+    const btn = document.getElementById('hub-copy-npub');
+    if (!btn) return;
+    btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
+    btn.classList.add('text-green-400');
+    setTimeout(() => {
+      btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>';
+      btn.classList.remove('text-green-400');
+    }, 1500);
+  }).catch(() => { });
+}
+
+// ── Creator Profile Modal ──
+
+function openCreatorModal() {
+  const profile = window._hubCreatorProfile;
+  const pubkey = window._hubCreatorPubkey;
+  if (!pubkey) return;
+
+  const modal = document.getElementById('creator-modal');
+  const content = document.getElementById('creator-modal-content');
+  if (!modal || !content) return;
+
+  const npub = hexToNpub(pubkey);
+  const npubShort = npub.slice(0, 16) + '…' + npub.slice(-8);
+  const displayName = (profile && (profile.display_name || profile.name)) || npubShort;
+  const avatar = profile && profile.picture ? profile.picture : '';
+  const banner = profile && profile.banner ? profile.banner : '';
+  const nip05 = profile && profile.nip05 ? profile.nip05 : '';
+  const about = profile && profile.about ? profile.about : '';
+  const lud16 = profile && profile.lud16 ? profile.lud16 : '';
+
+  const bannerHtml = banner
+    ? `<div class="w-full h-32 overflow-hidden">
+        <img src="${banner}" alt="Banner" class="w-full h-full object-cover" onerror="this.parentElement.innerHTML='<div class=\\'w-full h-32 bg-gradient-to-b from-den-primary/15 to-den-bg\\'></div>'">
+      </div>`
+    : `<div class="w-full h-20 bg-gradient-to-b from-den-primary/10 to-transparent"></div>`;
+
+  const avatarHtml = avatar
+    ? `<img src="${avatar}" alt="${displayName}" class="w-16 h-16 rounded-full object-cover border-4 border-den-bg -mt-8 relative z-10" onerror="this.outerHTML='<div class=\\'w-16 h-16 rounded-full bg-den-primary/20 flex items-center justify-center text-den-primary text-lg font-bold border-4 border-den-bg -mt-8 relative z-10\\'>${displayName[0] || '?'}</div>'">`
+    : `<div class="w-16 h-16 rounded-full bg-den-primary/20 flex items-center justify-center text-den-primary text-lg font-bold border-4 border-den-bg -mt-8 relative z-10">${displayName[0] || '?'}</div>`;
+
+  content.innerHTML = `
+    ${bannerHtml}
+    <div class="px-6 pb-6">
+      ${avatarHtml}
+      <div class="mt-2">
+        <div class="text-lg font-bold">${displayName}</div>
+        ${nip05 ? `<div class="text-xs text-den-primary mt-0.5">${nip05}</div>` : ''}
+      </div>
+
+      ${about ? `<p class="text-sm text-den-muted-fg leading-relaxed mt-3">${about}</p>` : ''}
+
+      <!-- npub -->
+      <div class="mt-4 flex items-center gap-2 bg-den-muted rounded-lg px-3 py-2">
+        <span class="text-xs text-den-muted-fg truncate flex-1 font-mono">${npubShort}</span>
+        <button onclick="copyCreatorNpub()" id="creator-copy-npub" class="w-7 h-7 flex items-center justify-center rounded text-den-muted-fg hover:text-den-fg transition-colors cursor-pointer bg-transparent border-none shrink-0" title="Copy npub">
+          <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
+        </button>
+      </div>
+
+      ${lud16 ? `
+      <div class="mt-3 flex items-center gap-2 text-sm text-den-muted-fg">
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+        <span class="truncate">${lud16}</span>
+      </div>` : ''}
+    </div>`;
+
+  modal.classList.remove('hidden');
+  modal.classList.add('flex');
+  creatorModalOpen = true;
+  document.body.style.overflow = 'hidden';
+}
+
+function closeCreatorModal() {
+  const modal = document.getElementById('creator-modal');
+  if (!modal) return;
+  modal.classList.add('hidden');
+  modal.classList.remove('flex');
+  creatorModalOpen = false;
+  document.body.style.overflow = '';
+}
+
+function copyCreatorNpub() {
+  const pubkey = window._hubCreatorPubkey;
+  if (!pubkey) return;
+  const npub = hexToNpub(pubkey);
+  navigator.clipboard.writeText(npub).then(() => {
+    const btn = document.getElementById('creator-copy-npub');
+    if (!btn) return;
+    btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
+    btn.classList.add('text-green-400');
+    setTimeout(() => {
+      btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>';
+      btn.classList.remove('text-green-400');
+    }, 1500);
+  }).catch(() => { });
+}
+
+// ── Escape key handler for creator modal ──
+// (Extends existing keydown listener)
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && creatorModalOpen) { closeCreatorModal(); return; }
+});

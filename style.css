@@ -121,3 +121,102 @@ html {
 }
 .build-notes a { color: #4B6BFF; text-decoration: underline; }
 .build-notes a:hover { color: #6983FF; }
+
+/* ── Hub Page ── */
+
+.hub-banner {
+  position: relative;
+  width: 100%;
+  height: 280px;
+  overflow: hidden;
+  background: linear-gradient(135deg, rgba(75,107,255,0.15) 0%, #171717 100%);
+}
+.hub-banner img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.hub-banner::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 120px;
+  background: linear-gradient(to top, #171717 0%, transparent 100%);
+  pointer-events: none;
+}
+
+.hub-icon {
+  width: 80px;
+  height: 80px;
+  border-radius: 1rem;
+  overflow: hidden;
+  border: 4px solid #171717;
+  background: #262626;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: -40px;
+  position: relative;
+  z-index: 1;
+  flex-shrink: 0;
+}
+.hub-icon img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.hub-tag-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 10px;
+  border-radius: 9999px;
+  background: rgba(75,107,255,0.1);
+  color: #4B6BFF;
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.creator-card {
+  transition: border-color 0.2s ease, background-color 0.2s ease;
+}
+.creator-card:hover {
+  border-color: rgba(75,107,255,0.3);
+  background-color: rgba(38,38,38,0.8);
+}
+
+/* Creator modal banner */
+.creator-modal-banner {
+  width: 100%;
+  height: 140px;
+  overflow: hidden;
+  background: linear-gradient(135deg, rgba(75,107,255,0.2) 0%, #262626 100%);
+}
+.creator-modal-banner img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* Hub page skeleton */
+.hub-skeleton {
+  background: rgba(255,255,255,0.04);
+  border-radius: 8px;
+  animation: skeleton-pulse 1.5s ease-in-out infinite;
+}
+@keyframes skeleton-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+/* Hub page deep link fallback message */
+.hub-app-fallback {
+  animation: hub-fade-in 0.3s ease;
+}
+@keyframes hub-fade-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
