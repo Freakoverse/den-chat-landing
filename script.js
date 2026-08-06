@@ -31,7 +31,7 @@ function initMobileNav() {
 
 // ── Nostr Config ──
 
-const ADMIN_PUBKEY = '3fc9e080c2dd77b21c6dafb0d5fabdbe2aaa90b43357f2afcccd8fef7bf43021';
+const ADMIN_PUBKEY = 'fb9fdfe293f2028c16ecf4d5178b1cd87c1d47a7ead284aa2dd230660096dd0c';
 const FREEDEN_PUBKEY = '3fc9e08185bb76c87836bec1abd7dbf155548258356bf2af99b27dee7fa18042';
 const FREEDEN_NPUB = 'npub18ly7pqxzm4mmy8rd47cdt74ahc424y95xdtl9t7vek8777l5xqss3pttwf';
 const RELAYS = ['wss://relay.damus.io', 'wss://relay.primal.net', 'wss://nos.lol'];
