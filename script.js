@@ -1207,7 +1207,7 @@ function renderSponsors(data) {
         const a = document.createElement('a');
         a.href = s.link || '#sponsors';
         if (s.link) { a.target = '_blank'; a.rel = 'noopener'; }
-        a.className = `${cfg.cardW} rounded-xl border border-den-border bg-den-muted/50 flex flex-col items-center justify-center gap-2 pt-3 pb-1 ${cfg.hoverBorder} transition-colors no-underline group overflow-hidden`;
+        a.className = `${cfg.cardW} rounded-xl border border-den-border bg-den-muted/50 flex flex-col items-center justify-center gap-3 pt-5 pb-3 ${cfg.hoverBorder} transition-colors no-underline group overflow-hidden`;
 
         if (s.logo) {
           const img = document.createElement('img');
@@ -1231,7 +1231,7 @@ function renderSponsors(data) {
     if (tier !== 'common' && anonCount > 0) {
       const w = cfg.cardW || 'w-40';
       const anonCard = document.createElement('div');
-      anonCard.className = `${w} rounded-xl border border-dashed border-den-border bg-den-muted/30 flex flex-col items-center justify-center gap-2 pt-3 pb-1 text-center overflow-hidden`;
+      anonCard.className = `${w} rounded-xl border border-dashed border-den-border bg-den-muted/30 flex flex-col items-center justify-center gap-3 pt-4 pb-3 text-center overflow-hidden`;
       // Number sits in a box the height of a tier logo so the card lines up
       // with the named-sponsor cards next to it.
       const numBox = document.createElement('div');
