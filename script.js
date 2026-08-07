@@ -1040,11 +1040,11 @@ function copyNpub() {
 // ── Sponsors ──
 
 const SPONSOR_TIER_CONFIG = {
-  mythic: { label: 'Mythic', cardW: 'w-52', cardH: 'h-32', logoSize: 'w-10 h-10', hoverBorder: 'hover:border-orange-500/40', textSize: 'text-xs' },
-  legendary: { label: 'Legendary', cardW: 'w-48', cardH: 'h-28', logoSize: 'w-9 h-9', hoverBorder: 'hover:border-amber-500/40', textSize: 'text-xs' },
-  epic: { label: 'Epic', cardW: 'w-40', cardH: 'h-24', logoSize: 'w-8 h-8', hoverBorder: 'hover:border-purple-500/40', textSize: 'text-[11px]' },
-  rare: { label: 'Rare', cardW: 'w-36', cardH: 'h-20', logoSize: 'w-7 h-7', hoverBorder: 'hover:border-blue-500/40', textSize: 'text-[11px]' },
-  common: { label: 'Common', cardW: '', cardH: '', logoSize: '', hoverBorder: '', textSize: '' },
+  mythic: { label: 'Mythic', cardW: 'w-52', cardH: 'h-32', logoMaxH: 'max-h-20', logoSize: 'w-10 h-10', hoverBorder: 'hover:border-orange-500/40', textSize: 'text-xs' },
+  legendary: { label: 'Legendary', cardW: 'w-48', cardH: 'h-28', logoMaxH: 'max-h-16', logoSize: 'w-9 h-9', hoverBorder: 'hover:border-amber-500/40', textSize: 'text-xs' },
+  epic: { label: 'Epic', cardW: 'w-40', cardH: 'h-24', logoMaxH: 'max-h-14', logoSize: 'w-8 h-8', hoverBorder: 'hover:border-purple-500/40', textSize: 'text-[11px]' },
+  rare: { label: 'Rare', cardW: 'w-36', cardH: 'h-20', logoMaxH: 'max-h-12', logoSize: 'w-7 h-7', hoverBorder: 'hover:border-blue-500/40', textSize: 'text-[11px]' },
+  common: { label: 'Common', cardW: '', cardH: '', logoMaxH: '', logoSize: '', hoverBorder: '', textSize: '' },
 };
 
 const DEN_LOGO_PATH = 'm907.73 888.19c-14.57 30.37-89.83 51.72-189.76 64.06 5.85-16.56 10.77-34.19 14.66-52.85l-110.69-249.99-44.5 49.32-87.19-156.39-87.19 156.39-44.5-49.32-110.94 250.31c3.89 18.59 8.8 36.14 14.63 52.64-100.38-12.32-176.05-33.71-190.67-64.17-24.45-50.96-43.84-108.37-57.13-171.91l217.42-490.57 65.58 75.02 192.52-284.86 192.52 284.86 65.57-75.02 216.94 489.95c-13.3 63.79-32.74 121.41-57.27 172.53z';
@@ -1207,13 +1207,13 @@ function renderSponsors(data) {
         const a = document.createElement('a');
         a.href = s.link || '#sponsors';
         if (s.link) { a.target = '_blank'; a.rel = 'noopener'; }
-        a.className = `${cfg.cardW} ${cfg.cardH} rounded-xl border border-den-border bg-den-muted/50 flex flex-col items-center justify-center gap-2 ${cfg.hoverBorder} transition-colors no-underline group overflow-hidden`;
+        a.className = `${cfg.cardW} rounded-xl border border-den-border bg-den-muted/50 flex flex-col items-center justify-center gap-2 pt-3 pb-1 ${cfg.hoverBorder} transition-colors no-underline group overflow-hidden`;
 
         if (s.logo) {
           const img = document.createElement('img');
           img.src = s.logo;
           img.alt = s.name || '';
-          img.className = 'max-w-[80%] max-h-[60%] object-contain';
+          img.className = `max-w-[80%] ${cfg.logoMaxH} object-contain`;
           a.appendChild(img);
         }
         if (s.name) {
@@ -1226,9 +1226,32 @@ function renderSponsors(data) {
       }
     }
 
-    // Anonymous count
+    // Anonymous — render as a card (matching the tier's card size) with the
+    // count shown inside it, sitting alongside the named-sponsor cards.
+    if (tier !== 'common' && anonCount > 0) {
+      const w = cfg.cardW || 'w-40';
+      const anonCard = document.createElement('div');
+      anonCard.className = `${w} rounded-xl border border-dashed border-den-border bg-den-muted/30 flex flex-col items-center justify-center gap-2 pt-3 pb-1 text-center overflow-hidden`;
+      // Number sits in a box the height of a tier logo so the card lines up
+      // with the named-sponsor cards next to it.
+      const numBox = document.createElement('div');
+      numBox.className = `${cfg.logoMaxH.replace('max-h', 'h')} flex items-center justify-center`;
+      const num = document.createElement('span');
+      num.className = 'text-3xl font-bold text-den-fg leading-none';
+      num.textContent = String(anonCount);
+      numBox.appendChild(num);
+      const lbl = document.createElement('span');
+      lbl.className = `${cfg.textSize} text-den-muted-fg`;
+      lbl.textContent = anonCount === 1 ? 'Anonymous' : 'Anonymous';
+      anonCard.appendChild(numBox);
+      anonCard.appendChild(lbl);
+      container.appendChild(anonCard);
+    }
+
+    // Legacy text line: keep it only for the 'common' tier (which is a
+    // text-link layout, not cards); hide it everywhere else.
     if (anonEl) {
-      if (anonCount > 0) {
+      if (tier === 'common' && anonCount > 0) {
         anonEl.textContent = `Anonymous ${cfg.label} sponsors: ${anonCount}`;
         anonEl.style.display = '';
       } else {
