@@ -44,18 +44,14 @@ const RELAYS = [
   'wss://relay.nostr.band',
   'wss://relay.snort.social',
   'wss://relay.wellorder.net',
-  'wss://relay.nostr.info',
   'wss://nostr.mom',
   'wss://nostr.novacisko.cz',
   'wss://nostrcheck.me',
-  'wss://pyramid.fiatjaf.com',
   'wss://relay.cxplay.org',
   'wss://relay.layer.systems',
   'wss://relay.nostr.moe',
   'wss://relay.poster.place',
   'wss://wheat.happytavern.co',
-  'wss://relay.noswhere.com',
-  'wss://search.nos.today',
 ];
 
 // ── FAQ ──
