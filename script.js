@@ -5,6 +5,13 @@ document.addEventListener('DOMContentLoaded', () => {
   initFaq();
   initGuides();
   initAbout();
+  // Warm the download builds cache in the background (at idle) so the download
+  // modal is already loaded by the time the user clicks Download.
+  if ('requestIdleCallback' in window) {
+    requestIdleCallback(() => prefetchBuilds(), { timeout: 3000 });
+  } else {
+    setTimeout(() => prefetchBuilds(), 1200);
+  }
 });
 
 // ── Mobile Navigation ──
@@ -617,8 +624,26 @@ function fetchNostrEvents(filter) {
 const BUILD_DTAG_PREFIX = 'den-chat-build-';
 
 let downloadBuilds = null; // cached after first fetch
+let downloadBuildsPromise = null; // in-flight fetch, so concurrent callers share it
 let downloadModalOpen = false;
-let openBuildIdx = null;
+let patchNotesOpen = false; // latest build's patch notes — collapsed by default
+
+// Fetch builds once and cache. Safe to call repeatedly and from the background
+// prefetch — concurrent callers share the same in-flight request. On failure the
+// promise is cleared so a later open (or retry) can try again.
+function loadBuilds() {
+  if (downloadBuilds) return Promise.resolve(downloadBuilds);
+  if (downloadBuildsPromise) return downloadBuildsPromise;
+  downloadBuildsPromise = fetchBuildsFromNostr()
+    .then(builds => { downloadBuilds = builds; return builds; })
+    .catch(err => { downloadBuildsPromise = null; throw err; });
+  return downloadBuildsPromise;
+}
+
+// Warm the cache in the background so the modal is instant on first open.
+function prefetchBuilds() {
+  loadBuilds().catch(() => { /* the modal will show a retry option on open */ });
+}
 
 function openDownloadModal() {
   const modal = document.getElementById('download-modal');
@@ -628,17 +653,18 @@ function openDownloadModal() {
   downloadModalOpen = true;
   document.body.style.overflow = 'hidden';
 
-  if (!downloadBuilds) {
-    renderDownloadContent('loading');
-    fetchBuildsFromNostr().then(builds => {
-      downloadBuilds = builds;
-      renderDownloadContent('ready');
-    }).catch(() => {
-      renderDownloadContent('error');
-    });
-  } else {
+  // Already warmed by the background prefetch → render instantly.
+  if (downloadBuilds) {
     renderDownloadContent('ready');
+    return;
   }
+  // Prefetch still in flight (or not started) — show loading, render when it lands.
+  renderDownloadContent('loading');
+  loadBuilds().then(() => {
+    if (downloadModalOpen) renderDownloadContent('ready');
+  }).catch(() => {
+    if (downloadModalOpen) renderDownloadContent('error');
+  });
 }
 
 function closeDownloadModal() {
@@ -787,71 +813,78 @@ function renderDownloadContent(state) {
     return;
   }
 
-  container.innerHTML = downloadBuilds.map((build, idx) => {
-    const isOpen = openBuildIdx === idx;
-    const date = new Date(build.published_at * 1000);
-    const dateStr = date.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+  // Only the latest build (list is sorted newest-first).
+  const build = downloadBuilds[0];
+  const idx = 0;
+  const date = new Date(build.published_at * 1000);
+  const dateStr = date.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
 
-    const platformsHtml = build.platforms.map((p, pi) => {
-      const icon = platformIcon(p.platform);
-      const ext = p.ext ? (p.ext.startsWith('.') ? p.ext : '.' + p.ext) : '';
-      const downloadUrl = ext && !p.url.match(/\.[a-z0-9]{1,10}$/i) ? p.url + ext : p.url;
-      const downloadName = `DEN-Chat-${build.version}-${p.platform.replace(/\s+/g, '-')}${ext}`;
-      const btnId = `dl-plat-${idx}-${pi}`;
-      return `
-        <button id="${btnId}" onclick="downloadBlossomFile('${downloadUrl}', '${downloadName}', '${btnId}')" class="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-den-muted border border-den-border hover:border-den-muted-fg transition-colors no-underline group w-full text-left cursor-pointer font-sans">
-          <span class="text-den-primary shrink-0">${icon}</span>
-          <span class="text-sm text-den-fg font-medium">${p.platform}</span>
-          <span class="dl-label text-xs text-den-muted-fg truncate flex-1 text-right group-hover:text-den-fg/60 transition-colors">${ext || p.url.split('/').pop() || 'download'}</span>
-        </button>`;
-    }).join('');
-
-    const srcExt = build.sourceExt ? (build.sourceExt.startsWith('.') ? build.sourceExt : '.' + build.sourceExt) : '';
-    const sourceDownloadUrl = srcExt && !build.sourceUrl.match(/\.[a-z0-9]{1,10}$/i) ? build.sourceUrl + srcExt : build.sourceUrl;
-    const sourceDownloadName = `DEN-Chat-${build.version}-source${srcExt}`;
-    const srcBtnId = `dl-src-${idx}`;
-    const sourceHtml = build.sourceUrl ? `
-      <button id="${srcBtnId}" onclick="downloadBlossomFile('${sourceDownloadUrl}', '${sourceDownloadName}', '${srcBtnId}')" class="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-den-muted border border-den-border hover:border-den-muted-fg transition-colors no-underline group w-full text-left cursor-pointer font-sans">
-        <span class="text-den-muted-fg shrink-0">${platformIcon('source')}</span>
-        <span class="text-sm text-den-fg font-medium">Source Code</span>
-        <span class="dl-label text-xs text-den-muted-fg truncate flex-1 text-right group-hover:text-den-fg/60 transition-colors">${srcExt || build.sourceUrl.split('/').pop() || 'source'}</span>
-      </button>` : '';
-
+  const platformsHtml = build.platforms.map((p, pi) => {
+    const icon = platformIcon(p.platform);
+    const ext = p.ext ? (p.ext.startsWith('.') ? p.ext : '.' + p.ext) : '';
+    const downloadUrl = ext && !p.url.match(/\.[a-z0-9]{1,10}$/i) ? p.url + ext : p.url;
+    const downloadName = `DEN-Chat-${build.version}-${p.platform.replace(/\s+/g, '-')}${ext}`;
+    const btnId = `dl-plat-${idx}-${pi}`;
     return `
-      <div class="rounded-xl border border-den-border overflow-auto bg-den-surface">
-        <button onclick="toggleBuild(${idx})" class="flex items-center justify-between w-full px-4 py-3 text-left cursor-pointer hover:bg-den-muted/50 transition-colors bg-transparent border-none font-sans">
-          <div class="flex items-center gap-3 pr-4">
-            <span class="text-sm font-semibold text-den-fg">${build.version}</span>
-            <span class="text-xs text-den-muted-fg">${dateStr}</span>
-          </div>
-          <svg class="w-4 h-4 text-den-muted-fg shrink-0 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/>
-          </svg>
-        </button>
-        ${isOpen ? `
-          <div class="px-4 py-4 space-y-2">
-            ${build.body ? `<div class="build-notes text-xs text-den-muted-fg leading-relaxed mb-3">${typeof marked !== 'undefined' ? marked.parse(build.body) : build.body}</div>` : ''}
-            ${platformsHtml}
-            ${sourceHtml}
-          </div>
-        ` : ''}
-      </div>`;
+      <button id="${btnId}" onclick="downloadBlossomFile('${downloadUrl}', '${downloadName}', '${btnId}')" class="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-den-muted border border-den-border hover:border-den-muted-fg transition-colors no-underline group w-full text-left cursor-pointer font-sans">
+        <span class="text-den-primary shrink-0">${icon}</span>
+        <span class="text-sm text-den-fg font-medium">${p.platform}</span>
+        <span class="dl-label text-xs text-den-muted-fg truncate flex-1 text-right group-hover:text-den-fg/60 transition-colors">${ext || p.url.split('/').pop() || 'download'}</span>
+      </button>`;
   }).join('');
+
+  const srcExt = build.sourceExt ? (build.sourceExt.startsWith('.') ? build.sourceExt : '.' + build.sourceExt) : '';
+  const sourceDownloadUrl = srcExt && !build.sourceUrl.match(/\.[a-z0-9]{1,10}$/i) ? build.sourceUrl + srcExt : build.sourceUrl;
+  const sourceDownloadName = `DEN-Chat-${build.version}-source${srcExt}`;
+  const srcBtnId = `dl-src-${idx}`;
+  const sourceHtml = build.sourceUrl ? `
+    <button id="${srcBtnId}" onclick="downloadBlossomFile('${sourceDownloadUrl}', '${sourceDownloadName}', '${srcBtnId}')" class="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-den-muted border border-den-border hover:border-den-muted-fg transition-colors no-underline group w-full text-left cursor-pointer font-sans">
+      <span class="text-den-muted-fg shrink-0">${platformIcon('source')}</span>
+      <span class="text-sm text-den-fg font-medium">Source Code</span>
+      <span class="dl-label text-xs text-den-muted-fg truncate flex-1 text-right group-hover:text-den-fg/60 transition-colors">${srcExt || build.sourceUrl.split('/').pop() || 'source'}</span>
+    </button>` : '';
+
+  const patchNotesHtml = build.body ? `
+    <div class="pt-1">
+      <button onclick="togglePatchNotes()" class="flex items-center justify-between w-full px-3 py-2 rounded-lg bg-transparent border border-den-border hover:bg-den-muted/50 transition-colors cursor-pointer font-sans">
+        <span class="text-xs font-medium text-den-fg">Patch notes</span>
+        <svg class="w-4 h-4 text-den-muted-fg shrink-0 transition-transform duration-200 ${patchNotesOpen ? 'rotate-180' : ''}" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/>
+        </svg>
+      </button>
+      ${patchNotesOpen ? `<div class="build-notes text-xs text-den-muted-fg leading-relaxed mt-2 px-1">${typeof marked !== 'undefined' ? marked.parse(build.body) : build.body}</div>` : ''}
+    </div>` : '';
+
+  container.innerHTML = `
+    <div class="rounded-xl border border-den-border overflow-auto bg-den-surface">
+      <div class="flex items-center justify-between w-full px-4 py-3 border-b border-den-border/50">
+        <div class="flex items-center gap-3 pr-4">
+          <span class="text-sm font-semibold text-den-fg">${build.version}</span>
+          <span class="text-xs text-den-muted-fg">${dateStr}</span>
+        </div>
+        <span class="text-[10px] uppercase tracking-wide text-den-primary font-semibold">Latest</span>
+      </div>
+      <div class="px-4 py-4 space-y-2">
+        ${platformsHtml}
+        ${sourceHtml}
+        ${patchNotesHtml}
+      </div>
+    </div>`;
 }
 
-function toggleBuild(idx) {
-  openBuildIdx = openBuildIdx === idx ? null : idx;
+function togglePatchNotes() {
+  patchNotesOpen = !patchNotesOpen;
   renderDownloadContent('ready');
 }
 
 function retryDownloadFetch() {
   downloadBuilds = null;
+  downloadBuildsPromise = null;
   renderDownloadContent('loading');
-  fetchBuildsFromNostr().then(builds => {
-    downloadBuilds = builds;
-    renderDownloadContent('ready');
+  loadBuilds().then(() => {
+    if (downloadModalOpen) renderDownloadContent('ready');
   }).catch(() => {
-    renderDownloadContent('error');
+    if (downloadModalOpen) renderDownloadContent('error');
   });
 }
 
@@ -900,8 +933,8 @@ function fetchBuildsFromNostr() {
         } catch { }
       }
       builds.sort((a, b) => b.published_at - a.published_at);
-      // Auto-open latest build
-      if (builds.length > 0) openBuildIdx = 0;
+      // Patch notes start collapsed for the latest build.
+      patchNotesOpen = false;
       resolve(builds);
     };
 
