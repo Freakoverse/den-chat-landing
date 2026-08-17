@@ -249,7 +249,7 @@ function fetchFaqFromNostr() {
       }
     };
 
-    const timeout = setTimeout(finish, 8000);
+    const timeout = setTimeout(finish, 5000);
 
     for (const relay of RELAYS) {
       try {
@@ -549,7 +549,7 @@ function fetchNostrReplaceable(dTag) {
       resolve(bestEvent);
     };
 
-    const timeout = setTimeout(finish, 8000);
+    const timeout = setTimeout(finish, 5000);
 
     for (const relay of RELAYS) {
       try {
@@ -591,7 +591,7 @@ function fetchNostrEvents(filter) {
       resolve(events);
     };
 
-    const timeout = setTimeout(finish, 8000);
+    const timeout = setTimeout(finish, 5000);
 
     for (const relay of RELAYS) {
       try {
@@ -939,7 +939,7 @@ function fetchBuildsFromNostr() {
     };
 
     // Timeout after 8 seconds
-    const timeout = setTimeout(finish, 8000);
+    const timeout = setTimeout(finish, 5000);
 
     for (const relay of RELAYS) {
       try {
@@ -1034,7 +1034,7 @@ function fetchProfile(pubkey) {
       catch { resolve(null); }
     };
 
-    const timeout = setTimeout(finish, 6000);
+    const timeout = setTimeout(finish, 5000);
 
     for (const relay of RELAYS) {
       try {
@@ -1170,7 +1170,7 @@ function fetchSponsorData(dTag) {
       catch { resolve(null); }
     };
 
-    const timeout = setTimeout(finish, 6000);
+    const timeout = setTimeout(finish, 5000);
 
     for (const relay of RELAYS) {
       try {
