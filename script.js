@@ -212,95 +212,11 @@ function faqPageNav(delta, page) {
 
 // Nostr fetch for FAQ
 function fetchFaqFromNostr() {
-  return new Promise((resolve, reject) => {
-    const filter = {
-      authors: [ADMIN_PUBKEY],
-      kinds: [30078],
-      '#d': [FAQ_DTAG],
-    };
-
-    let bestEvent = null;
-    let resolved = false;
-    let completedRelays = 0;
-    const sockets = [];
-
-    const finish = () => {
-      if (resolved) return;
-      resolved = true;
-      sockets.forEach(ws => { try { ws.close(); } catch { } });
-
-      if (!bestEvent || !bestEvent.content) {
-        resolve([]);
-        return;
-      }
-
-      try {
-        const arr = JSON.parse(bestEvent.content);
-        if (Array.isArray(arr)) {
-          const items = arr
-            .filter(item => item.title && item.body)
-            .map(item => ({ q: item.title, a: item.body }));
-          resolve(items);
-        } else {
-          resolve([]);
-        }
-      } catch {
-        reject(new Error('Failed to parse FAQ'));
-      }
-    };
-
-    const timeout = setTimeout(finish, 5000);
-
-    for (const relay of RELAYS) {
-      try {
-        const ws = new WebSocket(relay);
-        sockets.push(ws);
-
-        ws.onopen = () => {
-          const subId = 'faq_' + Math.random().toString(36).slice(2, 8);
-          ws.send(JSON.stringify(['REQ', subId, filter]));
-        };
-
-        ws.onmessage = (msg) => {
-          try {
-            const data = JSON.parse(msg.data);
-            if (data[0] === 'EVENT' && data[2]) {
-              const ev = data[2];
-              // Keep the latest version (replaceable)
-              if (!bestEvent || ev.created_at > bestEvent.created_at) {
-                bestEvent = ev;
-              }
-            }
-            if (data[0] === 'EOSE') {
-              completedRelays++;
-              if (completedRelays >= RELAYS.length) {
-                clearTimeout(timeout);
-                finish();
-              }
-            }
-          } catch { }
-        };
-
-        ws.onerror = () => {
-          completedRelays++;
-          if (completedRelays >= RELAYS.length && !resolved) {
-            clearTimeout(timeout);
-            if (bestEvent) finish();
-            else { resolved = true; reject(new Error('All relays failed')); }
-          }
-        };
-
-        ws.onclose = () => {
-          completedRelays++;
-          if (completedRelays >= RELAYS.length && !resolved) {
-            clearTimeout(timeout);
-            finish();
-          }
-        };
-      } catch {
-        completedRelays++;
-      }
-    }
+  return fetchNostrReplaceable(FAQ_DTAG).then(bestEvent => {
+    if (!bestEvent || !bestEvent.content) return [];
+    const arr = JSON.parse(bestEvent.content); // throws -> caller's .catch shows the error state
+    if (!Array.isArray(arr)) return [];
+    return arr.filter(item => item.title && item.body).map(item => ({ q: item.title, a: item.body }));
   });
 }
 
@@ -534,89 +450,92 @@ function fetchGuidesFromNostr() {
 }
 
 // Generic Nostr helpers (used by guides)
-function fetchNostrReplaceable(dTag) {
-  return new Promise((resolve, reject) => {
-    const filter = { authors: [ADMIN_PUBKEY], kinds: [30078], '#d': [dTag] };
-    let bestEvent = null;
-    let resolved = false;
-    let completedRelays = 0;
-    const sockets = [];
+// ── Relay WebSocket pool (Brave-safe) ──
+// Brave's "Restrict WebSockets pool" (Shields default) caps a site to 30 simultaneous
+// WebSockets per eTLD+1. The page's relay fetches used to open a socket to EVERY relay
+// at once and hold them all open until the fetch finished, so a few overlapping fetches
+// (FAQ + Guides + About + builds, and Guides fans out per article) blew past 30 — and
+// Brave then blocks the very connections we need (build events live on only a handful of
+// relays). Funnel ALL relay fetches through one global cap and close each socket the
+// moment it EOSEs, so the pool never fills. Well under 30 keeps headroom for sockets
+// still in the closing handshake. Other browsers just see slightly-batched fetches.
+const WS_MAX_CONCURRENT = 8;
+let wsActive = 0;
+const wsWaiters = [];
+function acquireWs() {
+  if (wsActive < WS_MAX_CONCURRENT) { wsActive++; return Promise.resolve(); }
+  return new Promise(res => wsWaiters.push(res));
+}
+function releaseWs() {
+  wsActive = Math.max(0, wsActive - 1);
+  const next = wsWaiters.shift();
+  if (next) { wsActive++; next(); }
+}
+
+// Query all RELAYS for `filter` with globally-capped concurrency. Each relay is opened
+// through the shared pool; its socket is closed as soon as it EOSEs (all stored events
+// received), after `perSocketMs`, or on error — freeing the slot for the next relay.
+// Resolves the deduped event list once every relay has settled or `overallMs` elapses.
+// Never rejects (an empty list is a valid result).
+function fetchEventsPooled(filter, { relays = RELAYS, perSocketMs = 3500, overallMs = 8000 } = {}) {
+  return new Promise((resolve) => {
+    const events = new Map();
+    let done = false;
+    let settled = 0;
+    const openSockets = new Set();
 
     const finish = () => {
-      if (resolved) return;
-      resolved = true;
-      sockets.forEach(ws => { try { ws.close(); } catch { } });
-      resolve(bestEvent);
+      if (done) return;
+      done = true;
+      clearTimeout(overall);
+      for (const ws of openSockets) { try { ws.close(); } catch { } }
+      resolve([...events.values()]);
     };
+    const overall = setTimeout(finish, overallMs);
+    const settleOne = () => { if (++settled >= relays.length && !done) finish(); };
 
-    const timeout = setTimeout(finish, 5000);
-
-    for (const relay of RELAYS) {
-      try {
-        const ws = new WebSocket(relay);
-        sockets.push(ws);
-        ws.onopen = () => ws.send(JSON.stringify(['REQ', 'r_' + Math.random().toString(36).slice(2, 6), filter]));
-        ws.onmessage = (msg) => {
-          try {
-            const data = JSON.parse(msg.data);
-            if (data[0] === 'EVENT' && data[2]) {
-              if (!bestEvent || data[2].created_at > bestEvent.created_at) bestEvent = data[2];
-            }
-            if (data[0] === 'EOSE') {
-              completedRelays++;
-              if (completedRelays >= RELAYS.length) { clearTimeout(timeout); finish(); }
-            }
-          } catch { }
+    for (const relay of relays) {
+      acquireWs().then(() => {
+        if (done) { releaseWs(); settleOne(); return; }
+        let released = false;
+        let ws;
+        const release = () => {
+          if (released) return;
+          released = true;
+          clearTimeout(socketTimer);
+          openSockets.delete(ws);
+          try { if (ws) ws.close(); } catch { }
+          releaseWs();
+          settleOne();
         };
-        ws.onerror = ws.onclose = () => {
-          completedRelays++;
-          if (completedRelays >= RELAYS.length && !resolved) { clearTimeout(timeout); finish(); }
-        };
-      } catch { completedRelays++; }
+        const socketTimer = setTimeout(release, perSocketMs);
+        try {
+          ws = new WebSocket(relay);
+          openSockets.add(ws);
+          ws.onopen = () => { try { ws.send(JSON.stringify(['REQ', 'q_' + Math.random().toString(36).slice(2, 8), filter])); } catch { } };
+          ws.onmessage = (msg) => {
+            try {
+              const data = JSON.parse(msg.data);
+              if (data[0] === 'EVENT' && data[2]) events.set(data[2].id, data[2]);
+              else if (data[0] === 'EOSE') release(); // all stored events received
+            } catch { }
+          };
+          ws.onerror = release;
+          ws.onclose = release;
+        } catch { release(); }
+      });
     }
   });
 }
 
+// Newest replaceable admin event for a d-tag (or null).
+function fetchNostrReplaceable(dTag) {
+  return fetchEventsPooled({ authors: [ADMIN_PUBKEY], kinds: [30078], '#d': [dTag] })
+    .then(evs => (evs.length ? evs.reduce((a, b) => (b.created_at > a.created_at ? b : a)) : null));
+}
+
 function fetchNostrEvents(filter) {
-  return new Promise((resolve, reject) => {
-    const events = [];
-    let resolved = false;
-    let completedRelays = 0;
-    const sockets = [];
-
-    const finish = () => {
-      if (resolved) return;
-      resolved = true;
-      sockets.forEach(ws => { try { ws.close(); } catch { } });
-      resolve(events);
-    };
-
-    const timeout = setTimeout(finish, 5000);
-
-    for (const relay of RELAYS) {
-      try {
-        const ws = new WebSocket(relay);
-        sockets.push(ws);
-        ws.onopen = () => ws.send(JSON.stringify(['REQ', 'e_' + Math.random().toString(36).slice(2, 6), filter]));
-        ws.onmessage = (msg) => {
-          try {
-            const data = JSON.parse(msg.data);
-            if (data[0] === 'EVENT' && data[2]) {
-              if (!events.find(e => e.id === data[2].id)) events.push(data[2]);
-            }
-            if (data[0] === 'EOSE') {
-              completedRelays++;
-              if (completedRelays >= RELAYS.length) { clearTimeout(timeout); finish(); }
-            }
-          } catch { }
-        };
-        ws.onerror = ws.onclose = () => {
-          completedRelays++;
-          if (completedRelays >= RELAYS.length && !resolved) { clearTimeout(timeout); finish(); }
-        };
-      } catch { completedRelays++; }
-    }
-  });
+  return fetchEventsPooled(filter);
 }
 
 // ── Download Modal ──
@@ -900,103 +819,37 @@ function retryDownloadFetch() {
 
 // Nostr relay fetch
 function fetchBuildsFromNostr() {
-  return new Promise((resolve, reject) => {
-    const filter = {
-      authors: [ADMIN_PUBKEY],
-      kinds: [30078],
-    };
-
-    const events = new Map(); // dedup by id
-    let resolved = false;
-    let completedRelays = 0;
-    const sockets = [];
-
-    const finish = () => {
-      if (resolved) return;
-      resolved = true;
-      sockets.forEach(ws => { try { ws.close(); } catch { } });
-
-      const builds = [];
-      for (const ev of events.values()) {
-        const dTag = ev.tags.find(t => t[0] === 'd')?.[1];
-        if (!dTag || !dTag.startsWith(BUILD_DTAG_PREFIX)) continue;
-        try {
-          const data = JSON.parse(ev.content);
-          if (data.deleted) continue;
-          if (ev.tags.some(t => t[0] === 'deleted')) continue;
-          if (data.version) {
-            builds.push({
-              id: ev.id,
-              version: data.version,
-              body: data.body || '',
-              sourceUrl: data.sourceUrl || '',
-              sourceExt: data.sourceExt || '',
-              platforms: Array.isArray(data.platforms) ? data.platforms.map(p => ({
-                platform: p.platform || '',
-                url: p.url || '',
-                ext: p.ext || '',
-              })) : [],
-              published_at: data.published_at || ev.created_at,
-              created_at: ev.created_at,
-            });
-          }
-        } catch { }
-      }
-      builds.sort((a, b) => b.published_at - a.published_at);
-      // Patch notes start collapsed for the latest build.
-      patchNotesOpen = false;
-      resolve(builds);
-    };
-
-    // Resolve with whatever arrived after 5s so a slow/dead relay can't hang the modal.
-    const timeout = setTimeout(finish, 5000);
-
-    for (const relay of RELAYS) {
+  return fetchEventsPooled({ authors: [ADMIN_PUBKEY], kinds: [30078] }).then(evList => {
+    const builds = [];
+    for (const ev of evList) {
+      const dTag = ev.tags.find(t => t[0] === 'd')?.[1];
+      if (!dTag || !dTag.startsWith(BUILD_DTAG_PREFIX)) continue;
       try {
-        const ws = new WebSocket(relay);
-        sockets.push(ws);
-
-        ws.onopen = () => {
-          const subId = 'builds_' + Math.random().toString(36).slice(2, 8);
-          ws.send(JSON.stringify(['REQ', subId, filter]));
-        };
-
-        ws.onmessage = (msg) => {
-          try {
-            const data = JSON.parse(msg.data);
-            if (data[0] === 'EVENT' && data[2]) {
-              events.set(data[2].id, data[2]);
-            }
-            if (data[0] === 'EOSE') {
-              completedRelays++;
-              if (completedRelays >= RELAYS.length) {
-                clearTimeout(timeout);
-                finish();
-              }
-            }
-          } catch { }
-        };
-
-        ws.onerror = () => {
-          completedRelays++;
-          if (completedRelays >= RELAYS.length && !resolved) {
-            clearTimeout(timeout);
-            if (events.size > 0) finish();
-            else { resolved = true; reject(new Error('All relays failed')); }
-          }
-        };
-
-        ws.onclose = () => {
-          completedRelays++;
-          if (completedRelays >= RELAYS.length && !resolved) {
-            clearTimeout(timeout);
-            finish();
-          }
-        };
-      } catch {
-        completedRelays++;
-      }
+        const data = JSON.parse(ev.content);
+        if (data.deleted) continue;
+        if (ev.tags.some(t => t[0] === 'deleted')) continue;
+        if (data.version) {
+          builds.push({
+            id: ev.id,
+            version: data.version,
+            body: data.body || '',
+            sourceUrl: data.sourceUrl || '',
+            sourceExt: data.sourceExt || '',
+            platforms: Array.isArray(data.platforms) ? data.platforms.map(p => ({
+              platform: p.platform || '',
+              url: p.url || '',
+              ext: p.ext || '',
+            })) : [],
+            published_at: data.published_at || ev.created_at,
+            created_at: ev.created_at,
+          });
+        }
+      } catch { }
     }
+    builds.sort((a, b) => b.published_at - a.published_at);
+    // Patch notes start collapsed for the latest build.
+    patchNotesOpen = false;
+    return builds;
   });
 }
 
@@ -1028,60 +881,11 @@ function initAbout() {
 }
 
 function fetchProfile(pubkey) {
-  return new Promise((resolve) => {
-    const filter = { authors: [pubkey], kinds: [0], limit: 1 };
-    let bestEvent = null;
-    let resolved = false;
-    let completedRelays = 0;
-    const sockets = [];
-
-    const finish = () => {
-      if (resolved) return;
-      resolved = true;
-      sockets.forEach(ws => { try { ws.close(); } catch { } });
-      if (!bestEvent || !bestEvent.content) { resolve(null); return; }
-      try { resolve(JSON.parse(bestEvent.content)); }
-      catch { resolve(null); }
-    };
-
-    const timeout = setTimeout(finish, 5000);
-
-    for (const relay of RELAYS) {
-      try {
-        const ws = new WebSocket(relay);
-        sockets.push(ws);
-
-        ws.onopen = () => {
-          ws.send(JSON.stringify(['REQ', 'prof_' + Math.random().toString(36).slice(2, 8), filter]));
-        };
-
-        ws.onmessage = (msg) => {
-          try {
-            const data = JSON.parse(msg.data);
-            if (data[0] === 'EVENT' && data[2]) {
-              const ev = data[2];
-              if (!bestEvent || ev.created_at > bestEvent.created_at) bestEvent = ev;
-            }
-            if (data[0] === 'EOSE') {
-              completedRelays++;
-              if (completedRelays >= RELAYS.length) { clearTimeout(timeout); finish(); }
-            }
-          } catch { }
-        };
-
-        ws.onerror = () => {
-          completedRelays++;
-          if (completedRelays >= RELAYS.length && !resolved) { clearTimeout(timeout); finish(); }
-        };
-
-        ws.onclose = () => {
-          completedRelays++;
-          if (completedRelays >= RELAYS.length && !resolved) { clearTimeout(timeout); finish(); }
-        };
-      } catch {
-        completedRelays++;
-      }
-    }
+  return fetchEventsPooled({ authors: [pubkey], kinds: [0], limit: 1 }).then(evs => {
+    if (!evs.length) return null;
+    const best = evs.reduce((a, b) => (b.created_at > a.created_at ? b : a));
+    if (!best.content) return null;
+    try { return JSON.parse(best.content); } catch { return null; }
   });
 }
 
@@ -1164,53 +968,9 @@ function loadSponsorsForYear(year) {
 }
 
 function fetchSponsorData(dTag) {
-  return new Promise((resolve, reject) => {
-    const filter = { authors: [ADMIN_PUBKEY], kinds: [30078], '#d': [dTag] };
-    let bestEvent = null;
-    let resolved = false;
-    let completedRelays = 0;
-    const sockets = [];
-
-    const finish = () => {
-      if (resolved) return;
-      resolved = true;
-      sockets.forEach(ws => { try { ws.close(); } catch { } });
-      if (!bestEvent || !bestEvent.content) { resolve(null); return; }
-      try { resolve(JSON.parse(bestEvent.content)); }
-      catch { resolve(null); }
-    };
-
-    const timeout = setTimeout(finish, 5000);
-
-    for (const relay of RELAYS) {
-      try {
-        const ws = new WebSocket(relay);
-        sockets.push(ws);
-        ws.onopen = () => {
-          ws.send(JSON.stringify(['REQ', 'spon_' + Math.random().toString(36).slice(2, 8), filter]));
-        };
-        ws.onmessage = (msg) => {
-          try {
-            const data = JSON.parse(msg.data);
-            if (data[0] === 'EVENT' && data[2]) {
-              if (!bestEvent || data[2].created_at > bestEvent.created_at) bestEvent = data[2];
-            }
-            if (data[0] === 'EOSE') {
-              completedRelays++;
-              if (completedRelays >= RELAYS.length) { clearTimeout(timeout); finish(); }
-            }
-          } catch { }
-        };
-        ws.onerror = () => {
-          completedRelays++;
-          if (completedRelays >= RELAYS.length && !resolved) { clearTimeout(timeout); finish(); }
-        };
-        ws.onclose = () => {
-          completedRelays++;
-          if (completedRelays >= RELAYS.length && !resolved) { clearTimeout(timeout); finish(); }
-        };
-      } catch { completedRelays++; }
-    }
+  return fetchNostrReplaceable(dTag).then(best => {
+    if (!best || !best.content) return null;
+    try { return JSON.parse(best.content); } catch { return null; }
   });
 }
 
@@ -1486,92 +1246,35 @@ function checkHubRoute() {
 // ── Hub Event Fetching ──
 
 function fetchHubEvent(pubkey, dTag, relayHints) {
-  return new Promise((resolve) => {
-    const filter = { kinds: [36942], authors: [pubkey], '#d': [dTag] };
+  // Hub-declared relays first (most likely to hold the event), then defaults.
+  const relays = [...new Set([...(relayHints || []), ...RELAYS])];
+  return fetchEventsPooled({ kinds: [36942], authors: [pubkey], '#d': [dTag] }, { relays, overallMs: 10000 }).then(evs => {
+    if (!evs.length) return null;
+    const bestEvent = evs.reduce((a, b) => (b.created_at > a.created_at ? b : a));
 
-    // Combine relay hints with default relays, deduplicated
-    const allRelays = [...new Set([...(relayHints || []), ...RELAYS])];
+    const getTag = (name) => bestEvent.tags.find(t => t[0] === name)?.[1] || '';
+    const getTags = (name) => bestEvent.tags.filter(t => t[0] === name).map(t => t[1]);
 
-    let bestEvent = null;
-    let resolved = false;
-    let completedRelays = 0;
-    const totalRelays = allRelays.length;
-    const sockets = [];
+    let settings = {};
+    try { settings = JSON.parse(bestEvent.content) || {}; } catch { }
 
-    const finish = () => {
-      if (resolved) return;
-      resolved = true;
-      sockets.forEach(ws => { try { ws.close(); } catch { } });
-
-      if (!bestEvent) { resolve(null); return; }
-
-      // Parse hub event into hub object
-      const getTag = (name) => bestEvent.tags.find(t => t[0] === name)?.[1] || '';
-      const getTags = (name) => bestEvent.tags.filter(t => t[0] === name).map(t => t[1]);
-
-      let settings = {};
-      try { settings = JSON.parse(bestEvent.content) || {}; } catch { }
-
-      const hub = {
-        name: getTag('n') || getTag('name') || 'Unnamed Hub',
-        tags: getTags('t'),
-        minPow: parseInt(getTag('w')) || 0,
-        epoch: getTag('epoch') || '',
-        nsfw: bestEvent.tags.some(t => t[0] === 'content-warning'),
-        discoverable: getTag('f') || '',
-        publishedAt: parseInt(getTag('published_at')) || bestEvent.created_at,
-        description: settings.description || (typeof settings.settings === 'object' ? settings.settings.description : '') || '',
-        icon: settings.icon || (typeof settings.settings === 'object' ? settings.settings.icon : '') || '',
-        banner: settings.banner || (typeof settings.settings === 'object' ? settings.settings.banner : '') || '',
-        channels: Array.isArray(settings.channels) ? settings.channels : [],
-        roles: Array.isArray(settings.roles) ? settings.roles : [],
-        categories: Array.isArray(settings.categories) ? settings.categories : [],
-        creatorPubkey: bestEvent.pubkey,
-        dTag: getTag('d'),
-      };
-
-      resolve(hub);
+    return {
+      name: getTag('n') || getTag('name') || 'Unnamed Hub',
+      tags: getTags('t'),
+      minPow: parseInt(getTag('w')) || 0,
+      epoch: getTag('epoch') || '',
+      nsfw: bestEvent.tags.some(t => t[0] === 'content-warning'),
+      discoverable: getTag('f') || '',
+      publishedAt: parseInt(getTag('published_at')) || bestEvent.created_at,
+      description: settings.description || (typeof settings.settings === 'object' ? settings.settings.description : '') || '',
+      icon: settings.icon || (typeof settings.settings === 'object' ? settings.settings.icon : '') || '',
+      banner: settings.banner || (typeof settings.settings === 'object' ? settings.settings.banner : '') || '',
+      channels: Array.isArray(settings.channels) ? settings.channels : [],
+      roles: Array.isArray(settings.roles) ? settings.roles : [],
+      categories: Array.isArray(settings.categories) ? settings.categories : [],
+      creatorPubkey: bestEvent.pubkey,
+      dTag: getTag('d'),
     };
-
-    const timeout = setTimeout(finish, 10000);
-
-    for (const relay of allRelays) {
-      try {
-        const ws = new WebSocket(relay);
-        sockets.push(ws);
-
-        ws.onopen = () => {
-          const subId = 'hub_' + Math.random().toString(36).slice(2, 8);
-          ws.send(JSON.stringify(['REQ', subId, filter]));
-        };
-
-        ws.onmessage = (msg) => {
-          try {
-            const data = JSON.parse(msg.data);
-            if (data[0] === 'EVENT' && data[2]) {
-              const ev = data[2];
-              if (!bestEvent || ev.created_at > bestEvent.created_at) bestEvent = ev;
-            }
-            if (data[0] === 'EOSE') {
-              completedRelays++;
-              if (completedRelays >= totalRelays) { clearTimeout(timeout); finish(); }
-            }
-          } catch { }
-        };
-
-        ws.onerror = () => {
-          completedRelays++;
-          if (completedRelays >= totalRelays && !resolved) { clearTimeout(timeout); finish(); }
-        };
-
-        ws.onclose = () => {
-          completedRelays++;
-          if (completedRelays >= totalRelays && !resolved) { clearTimeout(timeout); finish(); }
-        };
-      } catch {
-        completedRelays++;
-      }
-    }
   });
 }
 
