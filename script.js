@@ -561,7 +561,11 @@ function loadBuilds() {
       // Caching [] would wedge the modal on "No builds published yet" for the whole
       // page session; treat empty as a retryable miss so the next open tries again
       // and the modal shows the Try Again state instead of a dead end.
-      if (builds && builds.length) { downloadBuilds = builds; return builds; }
+      if (builds && builds.length) {
+        downloadBuilds = builds;
+        rebroadcastLatestBuild(builds); // background, best-effort — helps a stranded release converge
+        return builds;
+      }
       downloadBuildsPromise = null;
       throw new Error('No builds returned');
     })
@@ -842,6 +846,7 @@ function fetchBuildsFromNostr() {
             })) : [],
             published_at: data.published_at || ev.created_at,
             created_at: ev.created_at,
+            raw: ev, // the signed event, kept so we can cooperatively rebroadcast it
           });
         }
       } catch { }
@@ -851,6 +856,77 @@ function fetchBuildsFromNostr() {
     patchNotesOpen = false;
     return builds;
   });
+}
+
+// ── Cooperative rebroadcast (mirror of the client's eventRedundancy) ──
+// A release can land on a single slow relay (deterministic relay-limited publishing),
+// so the modal flaps between versions depending on which relay a given fetch reaches.
+// Any visitor helps: if the newest build event we fetched is held by fewer than
+// MIN_COPIES relays, re-publish the already-signed event (self-authenticating — no
+// signing) to the ones missing it. Whoever reaches the stranded version spreads it to
+// the relays that accept these writes, so it stops being stranded and the modal
+// converges. Runs once per page load, in the background. We only ever rebroadcast the
+// newest build event a visitor actually saw, so this spreads the latest, never a stale
+// one; relays that already hold it simply dedupe.
+const REBROADCAST_MIN_COPIES = 3;
+let rebroadcastDone = false;
+
+// Relays that currently hold the exact event id (each queried through the shared pool).
+function relaysHolding(eventId) {
+  const have = new Set();
+  return Promise.all(RELAYS.map(relay => new Promise(res => {
+    acquireWs().then(() => {
+      let done = false, ws;
+      const finish = () => { if (done) return; done = true; clearTimeout(t); try { if (ws) ws.close(); } catch { } releaseWs(); res(); };
+      const t = setTimeout(finish, 3500);
+      try {
+        ws = new WebSocket(relay);
+        ws.onopen = () => { try { ws.send(JSON.stringify(['REQ', 'chk_' + Math.random().toString(36).slice(2, 8), { ids: [eventId] }])); } catch { } };
+        ws.onmessage = (msg) => {
+          try {
+            const d = JSON.parse(msg.data);
+            if (d[0] === 'EVENT' && d[2] && d[2].id === eventId) have.add(relay);
+            else if (d[0] === 'EOSE') finish();
+          } catch { }
+        };
+        ws.onerror = finish;
+        ws.onclose = finish;
+      } catch { finish(); }
+    });
+  }))).then(() => have);
+}
+
+// Publish an already-signed event to the given relays, best-effort, through the pool.
+function publishEventToRelays(event, relays) {
+  return Promise.all(relays.map(relay => new Promise(res => {
+    acquireWs().then(() => {
+      let done = false, ws;
+      const finish = () => { if (done) return; done = true; clearTimeout(t); try { if (ws) ws.close(); } catch { } releaseWs(); res(); };
+      const t = setTimeout(finish, 4000);
+      try {
+        ws = new WebSocket(relay);
+        ws.onopen = () => { try { ws.send(JSON.stringify(['EVENT', event])); } catch { } };
+        ws.onmessage = (msg) => {
+          try { const d = JSON.parse(msg.data); if (d[0] === 'OK' && d[1] === event.id) finish(); } catch { }
+        };
+        ws.onerror = finish;
+        ws.onclose = finish;
+      } catch { finish(); }
+    });
+  })));
+}
+
+// If the newest build event is on fewer than MIN_COPIES relays, spread it to the rest.
+function rebroadcastLatestBuild(builds) {
+  if (rebroadcastDone || !builds || !builds.length) return;
+  rebroadcastDone = true;
+  const event = builds[0] && builds[0].raw;
+  if (!event || !event.id) return;
+  relaysHolding(event.id).then(have => {
+    if (have.size >= REBROADCAST_MIN_COPIES) return;
+    const missing = RELAYS.filter(r => !have.has(r));
+    if (missing.length) publishEventToRelays(event, missing);
+  }).catch(() => { /* best-effort */ });
 }
 
 // ── About / Freeden Profile ──
