@@ -632,10 +632,20 @@ let patchNotesOpen = false; // latest build's patch notes — collapsed by defau
 // prefetch — concurrent callers share the same in-flight request. On failure the
 // promise is cleared so a later open (or retry) can try again.
 function loadBuilds() {
-  if (downloadBuilds) return Promise.resolve(downloadBuilds);
+  if (downloadBuilds && downloadBuilds.length) return Promise.resolve(downloadBuilds);
   if (downloadBuildsPromise) return downloadBuildsPromise;
   downloadBuildsPromise = fetchBuildsFromNostr()
-    .then(builds => { downloadBuilds = builds; return builds; })
+    .then(builds => {
+      // Only cache a NON-EMPTY result. Build events live on just a few relays, so an
+      // empty fetch almost always means the race ended before reaching them (the
+      // background prefetch runs on cold connections), not that no builds exist.
+      // Caching [] would wedge the modal on "No builds published yet" for the whole
+      // page session; treat empty as a retryable miss so the next open tries again
+      // and the modal shows the Try Again state instead of a dead end.
+      if (builds && builds.length) { downloadBuilds = builds; return builds; }
+      downloadBuildsPromise = null;
+      throw new Error('No builds returned');
+    })
     .catch(err => { downloadBuildsPromise = null; throw err; });
   return downloadBuildsPromise;
 }
@@ -938,7 +948,7 @@ function fetchBuildsFromNostr() {
       resolve(builds);
     };
 
-    // Timeout after 8 seconds
+    // Resolve with whatever arrived after 5s so a slow/dead relay can't hang the modal.
     const timeout = setTimeout(finish, 5000);
 
     for (const relay of RELAYS) {
