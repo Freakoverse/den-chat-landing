@@ -2,16 +2,15 @@
 
 document.addEventListener('DOMContentLoaded', () => {
   initMobileNav();
+  // Warm the download builds cache FIRST — the download event is the primary CTA, and build events
+  // live on only a handful of relays. Deferring this to idle put it behind the guides fan-out (one
+  // fetch per article), which floods the shared 8-socket relay pool; the build fetch then sometimes
+  // raced past those few relays before the overall timeout, so the modal intermittently failed to
+  // load. Starting it first, on the freshest connections, lets it claim the pool before the flood.
+  prefetchBuilds();
   initFaq();
   initGuides();
   initAbout();
-  // Warm the download builds cache in the background (at idle) so the download
-  // modal is already loaded by the time the user clicks Download.
-  if ('requestIdleCallback' in window) {
-    requestIdleCallback(() => prefetchBuilds(), { timeout: 3000 });
-  } else {
-    setTimeout(() => prefetchBuilds(), 1200);
-  }
 });
 
 // ── Mobile Navigation ──
@@ -822,40 +821,58 @@ function retryDownloadFetch() {
 }
 
 // Nostr relay fetch
-function fetchBuildsFromNostr() {
-  return fetchEventsPooled({ authors: [ADMIN_PUBKEY], kinds: [30078] }).then(evList => {
-    const builds = [];
-    for (const ev of evList) {
-      const dTag = ev.tags.find(t => t[0] === 'd')?.[1];
-      if (!dTag || !dTag.startsWith(BUILD_DTAG_PREFIX)) continue;
-      try {
-        const data = JSON.parse(ev.content);
-        if (data.deleted) continue;
-        if (ev.tags.some(t => t[0] === 'deleted')) continue;
-        if (data.version) {
-          builds.push({
-            id: ev.id,
-            version: data.version,
-            body: data.body || '',
-            sourceUrl: data.sourceUrl || '',
-            sourceExt: data.sourceExt || '',
-            platforms: Array.isArray(data.platforms) ? data.platforms.map(p => ({
-              platform: p.platform || '',
-              url: p.url || '',
-              ext: p.ext || '',
-            })) : [],
-            published_at: data.published_at || ev.created_at,
-            created_at: ev.created_at,
-            raw: ev, // the signed event, kept so we can cooperatively rebroadcast it
-          });
-        }
-      } catch { }
+function parseBuilds(evList) {
+  const builds = [];
+  for (const ev of evList) {
+    const dTag = ev.tags.find(t => t[0] === 'd')?.[1];
+    if (!dTag || !dTag.startsWith(BUILD_DTAG_PREFIX)) continue;
+    try {
+      const data = JSON.parse(ev.content);
+      if (data.deleted) continue;
+      if (ev.tags.some(t => t[0] === 'deleted')) continue;
+      if (data.version) {
+        builds.push({
+          id: ev.id,
+          version: data.version,
+          body: data.body || '',
+          sourceUrl: data.sourceUrl || '',
+          sourceExt: data.sourceExt || '',
+          platforms: Array.isArray(data.platforms) ? data.platforms.map(p => ({
+            platform: p.platform || '',
+            url: p.url || '',
+            ext: p.ext || '',
+          })) : [],
+          published_at: data.published_at || ev.created_at,
+          created_at: ev.created_at,
+          raw: ev, // the signed event, kept so we can cooperatively rebroadcast it
+        });
+      }
+    } catch { }
+  }
+  builds.sort((a, b) => b.published_at - a.published_at);
+  return builds;
+}
+
+// Build events are stranded on a handful of relays (deterministic relay-limited publishing), so a
+// single pooled pass can finish before reaching them — especially the first, cold-connection pass.
+// Retry on an empty result with growing patience: later passes run on warm sockets and a freed pool,
+// which is what makes the download reliably appear instead of "sometimes". Returns as soon as any
+// build is found; gives up (empty) after the last pass so loadBuilds treats it as a retryable miss.
+async function fetchBuildsFromNostr() {
+  const passes = [
+    { perSocketMs: 4500, overallMs: 9000 },
+    { perSocketMs: 6000, overallMs: 12000 },
+  ];
+  for (let i = 0; i < passes.length; i++) {
+    const evList = await fetchEventsPooled({ authors: [ADMIN_PUBKEY], kinds: [30078] }, passes[i]);
+    const builds = parseBuilds(evList);
+    if (builds.length) {
+      patchNotesOpen = false; // patch notes start collapsed for the latest build
+      return builds;
     }
-    builds.sort((a, b) => b.published_at - a.published_at);
-    // Patch notes start collapsed for the latest build.
-    patchNotesOpen = false;
-    return builds;
-  });
+    if (i < passes.length - 1) await new Promise(r => setTimeout(r, 500));
+  }
+  return [];
 }
 
 // ── Cooperative rebroadcast (mirror of the client's eventRedundancy) ──
