@@ -60,6 +60,58 @@ const RELAYS = [
   'wss://wheat.happytavern.co',
 ];
 
+// Mirrors the client's default Blossom servers. A hub's icon/banner URL points at ONE server
+// (wherever the upload landed first); if that server dropped the blob, the same hash is usually
+// still on the hub's own `o` servers or on these, which is exactly what the client's BlossomImage
+// component does. The landing rendered a bare <img> with no fallback, so a single missing copy
+// showed the initials box and the empty banner (the "banner and icon don't load" report).
+const BLOSSOM_SERVERS = [
+  'https://blossom.primal.net',
+  'https://blossom.data.haus',
+  'https://nostr.download',
+  'https://blossom.jumble.social',
+  'https://blossom.ditto.pub',
+  'https://blossom-01.uid.ovh',
+  'https://blossom-02.uid.ovh',
+];
+
+/** For a Blossom (hash-addressed) URL, the same blob on the hub's servers then the defaults. */
+function blossomAlternates(url, hubServers) {
+  let u;
+  try { u = new URL(url); } catch { return []; }
+  const m = u.pathname.match(/\/([a-f0-9]{64})(\.[a-z0-9]+)?$/i);
+  if (!m) return [];
+  const path = `/${m[1]}${m[2] || ''}`;
+  const seen = new Set([u.origin]);
+  const out = [];
+  for (const srv of [...(hubServers || []), ...BLOSSOM_SERVERS]) {
+    let o;
+    try { o = new URL(srv).origin; } catch { continue; }
+    if (seen.has(o)) continue;
+    seen.add(o);
+    out.push(o + path);
+  }
+  return out;
+}
+
+/** <img onerror> handler: walk the alternates stored on the element, then apply the final fallback HTML. */
+function blossomImgError(img) {
+  let alts = [];
+  try { alts = JSON.parse(img.dataset.alts || '[]'); } catch { }
+  if (alts.length > 0) {
+    img.dataset.alts = JSON.stringify(alts.slice(1));
+    img.src = alts[0];
+    return;
+  }
+  const mode = img.dataset.fallback;
+  if (mode === 'banner') {
+    img.parentElement.innerHTML = '<div class="w-full h-full bg-gradient-to-b from-den-primary/20 to-den-bg"></div>';
+  } else {
+    const initials = img.dataset.initials || '?';
+    img.outerHTML = `<div class="w-20 h-20 rounded-2xl bg-den-primary/20 flex items-center justify-center text-den-primary text-xl font-bold border-4 border-den-bg -mt-10 relative z-10">${initials}</div>`;
+  }
+}
+
 // ── FAQ ──
 
 const FAQ_DTAG = 'den-chat-faq';
@@ -1359,9 +1411,12 @@ function fetchHubEvent(pubkey, dTag, relayHints) {
       nsfw: bestEvent.tags.some(t => t[0] === 'content-warning'),
       discoverable: getTag('f') || '',
       publishedAt: parseInt(getTag('published_at')) || bestEvent.created_at,
-      description: settings.description || (typeof settings.settings === 'object' ? settings.settings.description : '') || '',
-      icon: settings.icon || (typeof settings.settings === 'object' ? settings.settings.icon : '') || '',
-      banner: settings.banner || (typeof settings.settings === 'object' ? settings.settings.banner : '') || '',
+      // v2 hubs (encrypted content) publish the public face as plaintext tags; v1 keeps it in content.settings.
+      description: getTag('about') || settings.description || (typeof settings.settings === 'object' ? settings.settings.description : '') || '',
+      icon: getTag('picture') || settings.icon || (typeof settings.settings === 'object' ? settings.settings.icon : '') || '',
+      banner: getTag('banner') || settings.banner || (typeof settings.settings === 'object' ? settings.settings.banner : '') || '',
+      blossomServers: getTags('o'),
+      version: parseInt(getTag('version')) || 1,
       channels: Array.isArray(settings.channels) ? settings.channels : [],
       roles: Array.isArray(settings.roles) ? settings.roles : [],
       categories: Array.isArray(settings.categories) ? settings.categories : [],
@@ -1461,7 +1516,7 @@ function renderHubPage(hub, creatorProfile, naddr) {
   // Banner
   const bannerHtml = hub.banner
     ? `<div class="relative w-full max-w-[720px] mx-auto h-[280px] overflow-hidden rounded-t-xl">
-        <img src="${hub.banner}" alt="Hub banner" class="w-full h-full object-cover" onerror="this.parentElement.innerHTML='<div class=\\'w-full h-full bg-gradient-to-b from-den-primary/20 to-den-bg\\'></div>'">
+        <img src="${hub.banner}" alt="Hub banner" class="w-full h-full object-cover" data-fallback="banner" data-alts='${JSON.stringify(blossomAlternates(hub.banner, hub.blossomServers)).replace(/'/g, '&#39;')}' onerror="blossomImgError(this)">
         <div class="absolute inset-0 bg-gradient-to-t from-den-bg via-den-bg/40 to-transparent"></div>
       </div>`
     : `<div class="w-full max-w-[720px] mx-auto h-[280px] bg-gradient-to-b from-den-primary/20 to-den-bg rounded-t-xl"></div>`;
@@ -1469,7 +1524,7 @@ function renderHubPage(hub, creatorProfile, naddr) {
   // Icon
   const initials = hub.name.split(/\s+/).map(w => w[0]).join('').toUpperCase().slice(0, 2);
   const iconHtml = hub.icon
-    ? `<img src="${hub.icon}" alt="${hub.name}" class="w-20 h-20 rounded-2xl object-cover border-4 border-den-bg -mt-10 relative z-10" onerror="this.outerHTML='<div class=\\'w-20 h-20 rounded-2xl bg-den-primary/20 flex items-center justify-center text-den-primary text-xl font-bold border-4 border-den-bg -mt-10 relative z-10\\'>${initials}</div>'">`
+    ? `<img src="${hub.icon}" alt="${hub.name}" class="w-20 h-20 rounded-2xl object-cover border-4 border-den-bg -mt-10 relative z-10" data-fallback="icon" data-initials="${initials}" data-alts='${JSON.stringify(blossomAlternates(hub.icon, hub.blossomServers)).replace(/'/g, '&#39;')}' onerror="blossomImgError(this)">`
     : `<div class="w-20 h-20 rounded-2xl bg-den-primary/20 flex items-center justify-center text-den-primary text-xl font-bold border-4 border-den-bg -mt-10 relative z-10">${initials}</div>`;
 
   // NSFW badge
