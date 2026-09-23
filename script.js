@@ -40,24 +40,25 @@ function initMobileNav() {
 const ADMIN_PUBKEY = 'fb9fdfe293f2028c16ecf4d5178b1cd87c1d47a7ead284aa2dd230660096dd0c';
 const FREEDEN_PUBKEY = '3fc9e08185bb76c87836bec1abd7dbf155548258356bf2af99b27dee7fa18042';
 const FREEDEN_NPUB = 'npub18ly7pqxzm4mmy8rd47cdt74ahc424y95xdtl9t7vek8777l5xqss3pttwf';
-// Mirrors the client's DEFAULT_RELAYS (plus damus) so the landing reads from
+// Mirrors the client's DEFAULT_RELAYS exactly (keep in sync) so the landing reads from
 // wherever the admin's client publishes content — otherwise updates that land
 // on relays the landing doesn't read would be invisible here.
 const RELAYS = [
-  'wss://relay.damus.io',
   'wss://relay.primal.net',
   'wss://nos.lol',
-  'wss://relay.nostr.band',
-  'wss://relay.snort.social',
   'wss://relay.wellorder.net',
   'wss://nostr.mom',
-  'wss://nostr.novacisko.cz',
   'wss://nostrcheck.me',
-  'wss://relay.cxplay.org',
+  'wss://wheat.happytavern.co',
+  'wss://relay.0xchat.com',
+  'wss://relay.snort.social',
+  'wss://nostr.bitcoiner.social',
   'wss://relay.layer.systems',
+  'wss://relay.nostr.band',
+  'wss://nostr.novacisko.cz',
+  'wss://relay.cxplay.org',
   'wss://relay.nostr.moe',
   'wss://relay.poster.place',
-  'wss://wheat.happytavern.co',
 ];
 
 // Mirrors the client's default Blossom servers. A hub's icon/banner URL points at ONE server
@@ -65,6 +66,9 @@ const RELAYS = [
 // still on the hub's own `o` servers or on these, which is exactly what the client's BlossomImage
 // component does. The landing rendered a bare <img> with no fallback, so a single missing copy
 // showed the initials box and the empty banner (the "banner and icon don't load" report).
+// The client's default hub banner (client/public/assets/hub-banner-placeholder.jpg), copied here.
+const HUB_BANNER_PLACEHOLDER = 'assets/hub-banner-placeholder.jpg';
+
 const BLOSSOM_SERVERS = [
   'https://blossom.primal.net',
   'https://blossom.data.haus',
@@ -105,7 +109,8 @@ function blossomImgError(img) {
   }
   const mode = img.dataset.fallback;
   if (mode === 'banner') {
-    img.parentElement.innerHTML = '<div class="w-full h-full bg-gradient-to-b from-den-primary/20 to-den-bg"></div>';
+    img.onerror = null;
+    img.src = HUB_BANNER_PLACEHOLDER;
   } else {
     const initials = img.dataset.initials || '?';
     img.outerHTML = `<div class="w-20 h-20 rounded-2xl bg-den-primary/20 flex items-center justify-center text-den-primary text-xl font-bold border-4 border-den-bg -mt-10 relative z-10">${initials}</div>`;
@@ -1519,7 +1524,10 @@ function renderHubPage(hub, creatorProfile, naddr) {
         <img src="${hub.banner}" alt="Hub banner" class="w-full h-full object-cover" data-fallback="banner" data-alts='${JSON.stringify(blossomAlternates(hub.banner, hub.blossomServers)).replace(/'/g, '&#39;')}' onerror="blossomImgError(this)">
         <div class="absolute inset-0 bg-gradient-to-t from-den-bg via-den-bg/40 to-transparent"></div>
       </div>`
-    : `<div class="w-full max-w-[720px] mx-auto h-[280px] bg-gradient-to-b from-den-primary/20 to-den-bg rounded-t-xl"></div>`;
+    : `<div class="relative w-full max-w-[720px] mx-auto h-[280px] overflow-hidden rounded-t-xl">
+        <img src="${HUB_BANNER_PLACEHOLDER}" alt="" class="w-full h-full object-cover">
+        <div class="absolute inset-0 bg-gradient-to-t from-den-bg via-den-bg/40 to-transparent"></div>
+      </div>`;
 
   // Icon
   const initials = hub.name.split(/\s+/).map(w => w[0]).join('').toUpperCase().slice(0, 2);
