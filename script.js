@@ -98,6 +98,33 @@ function blossomAlternates(url, hubServers) {
   return out;
 }
 
+/**
+ * Gated media. Hub icons, banners and creator avatars are user-provided files from a decentralized
+ * network; this site does not vet them, so they are never loaded until the visitor clicks "Reveal".
+ * Gated <img> elements carry data-src (and data-alts) instead of src and start hidden behind a
+ * placeholder ([data-media-placeholder]); the toggle swaps the two and only sets src on first reveal.
+ */
+function toggleGatedMedia(rootId, btn) {
+  const root = document.getElementById(rootId);
+  if (!root) return;
+  const reveal = root.dataset.mediaRevealed !== 'true';
+  root.dataset.mediaRevealed = reveal ? 'true' : 'false';
+  root.querySelectorAll('img[data-media-real]').forEach((img) => {
+    if (reveal && !img.getAttribute('src')) img.setAttribute('src', img.dataset.src || '');
+    img.classList.toggle('hidden', !reveal);
+  });
+  root.querySelectorAll('[data-media-placeholder]').forEach((el) => el.classList.toggle('hidden', reveal));
+  if (btn) btn.textContent = reveal ? 'Hide images' : 'Reveal images';
+}
+
+function gatedMediaSlab(rootId) {
+  return `<div class="max-w-[720px] mx-auto mb-3 flex items-center gap-3 rounded-xl border border-den-border bg-den-muted/50 px-4 py-3">
+      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-den-muted-fg shrink-0"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="M9 12l2 2 4-4"/></svg>
+      <p class="text-xs text-den-muted-fg flex-1 min-w-0">Images on this page are user-uploaded media from a decentralized network and are hidden until you choose to see them.</p>
+      <button type="button" onclick="toggleGatedMedia('${rootId}', this)" class="shrink-0 px-3 py-1.5 rounded-lg bg-den-primary text-white text-xs font-medium hover:bg-den-primary/90 transition-colors cursor-pointer">Reveal images</button>
+    </div>`;
+}
+
 /** <img onerror> handler: walk the alternates stored on the element, then apply the final fallback HTML. */
 function blossomImgError(img) {
   let alts = [];
@@ -111,6 +138,8 @@ function blossomImgError(img) {
   if (mode === 'banner') {
     img.onerror = null;
     img.src = HUB_BANNER_PLACEHOLDER;
+  } else if (mode === 'avatar') {
+    img.outerHTML = `<div class="w-10 h-10 rounded-full bg-den-primary/20 flex items-center justify-center text-den-primary text-sm font-bold shrink-0">${img.dataset.initials || '?'}</div>`;
   } else {
     const initials = img.dataset.initials || '?';
     img.outerHTML = `<div class="w-20 h-20 rounded-2xl bg-den-primary/20 flex items-center justify-center text-den-primary text-xl font-bold border-4 border-den-bg -mt-10 relative z-10">${initials}</div>`;
@@ -1521,7 +1550,8 @@ function renderHubPage(hub, creatorProfile, naddr) {
   // Banner
   const bannerHtml = hub.banner
     ? `<div class="relative w-full max-w-[720px] mx-auto h-[280px] overflow-hidden rounded-t-xl">
-        <img src="${hub.banner}" alt="Hub banner" class="w-full h-full object-cover" data-fallback="banner" data-alts='${JSON.stringify(blossomAlternates(hub.banner, hub.blossomServers)).replace(/'/g, '&#39;')}' onerror="blossomImgError(this)">
+        <img src="${HUB_BANNER_PLACEHOLDER}" alt="" class="w-full h-full object-cover" data-media-placeholder>
+        <img alt="Hub banner" class="w-full h-full object-cover hidden" data-media-real data-src="${hub.banner}" data-fallback="banner" data-alts='${JSON.stringify(blossomAlternates(hub.banner, hub.blossomServers)).replace(/'/g, '&#39;')}' onerror="blossomImgError(this)">
         <div class="absolute inset-0 bg-gradient-to-t from-den-bg via-den-bg/40 to-transparent"></div>
       </div>`
     : `<div class="relative w-full max-w-[720px] mx-auto h-[280px] overflow-hidden rounded-t-xl">
@@ -1532,7 +1562,7 @@ function renderHubPage(hub, creatorProfile, naddr) {
   // Icon
   const initials = hub.name.split(/\s+/).map(w => w[0]).join('').toUpperCase().slice(0, 2);
   const iconHtml = hub.icon
-    ? `<img src="${hub.icon}" alt="${hub.name}" class="w-20 h-20 rounded-2xl object-cover border-4 border-den-bg -mt-10 relative z-10" data-fallback="icon" data-initials="${initials}" data-alts='${JSON.stringify(blossomAlternates(hub.icon, hub.blossomServers)).replace(/'/g, '&#39;')}' onerror="blossomImgError(this)">`
+    ? `<div class="w-20 h-20 rounded-2xl bg-den-primary/20 flex items-center justify-center text-den-primary text-xl font-bold border-4 border-den-bg -mt-10 relative z-10" data-media-placeholder>${initials}</div><img alt="${hub.name}" class="w-20 h-20 rounded-2xl object-cover border-4 border-den-bg -mt-10 relative z-10 hidden" data-media-real data-src="${hub.icon}" data-fallback="icon" data-initials="${initials}" data-alts='${JSON.stringify(blossomAlternates(hub.icon, hub.blossomServers)).replace(/'/g, '&#39;')}' onerror="blossomImgError(this)">`
     : `<div class="w-20 h-20 rounded-2xl bg-den-primary/20 flex items-center justify-center text-den-primary text-xl font-bold border-4 border-den-bg -mt-10 relative z-10">${initials}</div>`;
 
   // NSFW badge
@@ -1555,10 +1585,13 @@ function renderHubPage(hub, creatorProfile, naddr) {
 
   // Creator card
   const creatorAvatarHtml = creatorAvatar
-    ? `<img src="${creatorAvatar}" alt="${creatorName}" class="w-10 h-10 rounded-full object-cover shrink-0" onerror="this.outerHTML='<div class=\\'w-10 h-10 rounded-full bg-den-primary/20 flex items-center justify-center text-den-primary text-sm font-bold shrink-0\\'>${creatorName[0] || '?'}</div>'">`
+    ? `<div class="w-10 h-10 rounded-full bg-den-primary/20 flex items-center justify-center text-den-primary text-sm font-bold shrink-0" data-media-placeholder>${creatorName[0] || '?'}</div><img alt="${creatorName}" class="w-10 h-10 rounded-full object-cover shrink-0 hidden" data-media-real data-src="${creatorAvatar}" data-fallback="avatar" data-initials="${creatorName[0] || '?'}" onerror="blossomImgError(this)">`
     : `<div class="w-10 h-10 rounded-full bg-den-primary/20 flex items-center justify-center text-den-primary text-sm font-bold shrink-0">${creatorName[0] || '?'}</div>`;
 
+  const hasGatedMedia = !!(hub.banner || hub.icon || creatorAvatar);
+  container.dataset.mediaRevealed = 'false';
   container.innerHTML = `
+    ${hasGatedMedia ? gatedMediaSlab('hub-page-content') : ''}
     ${bannerHtml}
     <div class="max-w-2xl mx-auto px-6 pb-16">
       <!-- Icon + Name -->
@@ -1694,16 +1727,19 @@ function openCreatorModal() {
   const lud16 = profile && profile.lud16 ? profile.lud16 : '';
 
   const bannerHtml = banner
-    ? `<div class="w-full h-32 overflow-hidden">
-        <img src="${banner}" alt="Banner" class="w-full h-full object-cover" onerror="this.parentElement.innerHTML='<div class=\\'w-full h-32 bg-gradient-to-b from-den-primary/15 to-den-bg\\'></div>'">
+    ? `<div class="relative w-full h-32 overflow-hidden">
+        <div class="w-full h-32 bg-gradient-to-b from-den-primary/15 to-den-bg" data-media-placeholder></div>
+        <img alt="Banner" class="w-full h-full object-cover hidden" data-media-real data-src="${banner}" onerror="this.onerror=null;this.classList.add('hidden');this.previousElementSibling.classList.remove('hidden')">
       </div>`
     : `<div class="w-full h-20 bg-gradient-to-b from-den-primary/10 to-transparent"></div>`;
 
   const avatarHtml = avatar
-    ? `<img src="${avatar}" alt="${displayName}" class="w-16 h-16 rounded-full object-cover border-4 border-den-bg -mt-8 relative z-10" onerror="this.outerHTML='<div class=\\'w-16 h-16 rounded-full bg-den-primary/20 flex items-center justify-center text-den-primary text-lg font-bold border-4 border-den-bg -mt-8 relative z-10\\'>${displayName[0] || '?'}</div>'">`
+    ? `<div class="w-16 h-16 rounded-full bg-den-primary/20 flex items-center justify-center text-den-primary text-lg font-bold border-4 border-den-bg -mt-8 relative z-10" data-media-placeholder>${displayName[0] || '?'}</div><img alt="${displayName}" class="w-16 h-16 rounded-full object-cover border-4 border-den-bg -mt-8 relative z-10 hidden" data-media-real data-src="${avatar}" onerror="this.onerror=null;this.classList.add('hidden');this.previousElementSibling.classList.remove('hidden')">`
     : `<div class="w-16 h-16 rounded-full bg-den-primary/20 flex items-center justify-center text-den-primary text-lg font-bold border-4 border-den-bg -mt-8 relative z-10">${displayName[0] || '?'}</div>`;
 
+  content.dataset.mediaRevealed = 'false';
   content.innerHTML = `
+    ${(banner || avatar) ? `<div class="px-4 pt-4">${gatedMediaSlab(content.id || 'creator-modal-content')}</div>` : ''}
     ${bannerHtml}
     <div class="px-6 pb-6">
       ${avatarHtml}
