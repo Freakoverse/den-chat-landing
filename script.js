@@ -1392,6 +1392,97 @@ function hexToNpub(hex) {
   return bech32Encode('npub', words);
 }
 
+// ── NIP-SHORT hub address resolution ──
+// A hub can be shared as a short address `s<authority><code>` (see NIP-SHORT). `authority` is the
+// author's npub (or a DNN id, which needs the app to resolve); `code` is the first 6 hex of SHA-256
+// over the coordinate `a:36942:<pubkey>:<d>`, so it is stable across hub edits and relay-indexed as `#s`.
+
+const SHORT_CODE_RE = /^[0-9a-f]{6}$/;
+
+/** Decode an npub to a 32-byte hex pubkey (null if invalid). */
+function decodeNpub(npub) {
+  const d = bech32Decode(npub);
+  if (!d || d.prefix !== 'npub') return null;
+  const bytes = convertBits(d.words, 5, 8, false);
+  if (!bytes || bytes.length !== 32) return null;
+  return Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+/** Encode a coordinate as an naddr (NIP-19), so the resolved hub's app/web links use a canonical address. */
+function encodeNaddr(pubkeyHex, identifier, kind, relays) {
+  const tlv = [];
+  const pushTlv = (type, bytes) => { tlv.push(type, bytes.length & 0xff, ...bytes); };
+  pushTlv(0, Array.from(new TextEncoder().encode(identifier || '')));      // 0: identifier (d)
+  for (const r of (relays || [])) pushTlv(1, Array.from(new TextEncoder().encode(r))); // 1: relays
+  const pk = [];
+  for (let i = 0; i < pubkeyHex.length; i += 2) pk.push(parseInt(pubkeyHex.substr(i, 2), 16));
+  pushTlv(2, pk);                                                          // 2: author (32 bytes)
+  pushTlv(3, [(kind >>> 24) & 255, (kind >>> 16) & 255, (kind >>> 8) & 255, kind & 255]); // 3: kind (BE u32)
+  const words = convertBits(tlv, 8, 5, true);
+  if (!words) return null;
+  return bech32Encode('naddr', words);
+}
+
+/** Parse `s<authority><code>[-selector]`. The code is fixed-length, so it is peeled off the END. */
+function parseShortAddress(input) {
+  const raw = String(input).trim().replace(/^nostr:/i, '');
+  if (!raw.startsWith('s') || raw.length < 2 + 6) return null;
+  const body = raw.slice(1);
+  const dash = body.indexOf('-');
+  const head = dash === -1 ? body : body.slice(0, dash);
+  const suffix = dash === -1 ? '' : body.slice(dash + 1).toLowerCase();
+  if (suffix && !/^[0-9a-f]+$/.test(suffix)) return null;
+  const code = head.slice(-6).toLowerCase();
+  const authority = head.slice(0, -6);
+  if (!SHORT_CODE_RE.test(code) || !authority) return null;
+  return { authority, code, suffix };
+}
+
+/** True for an `s…` string that is a well-formed short address (not a bare word or npub). */
+function looksLikeShortAddress(input) {
+  const p = parseShortAddress(input);
+  if (!p) return false;
+  // Only npub authorities can be resolved here; a DNN authority resolves in the app.
+  return /^npub1/i.test(p.authority) && !!decodeNpub(p.authority);
+}
+
+/** Full SHA-256 hex over the canonical input (code = first 6 chars; selectors continue from there). */
+async function computeFullHash(canonicalInput) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(canonicalInput));
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+/**
+ * Resolve a hub short address to its coordinate by fetching the author's kind-36942 events tagged
+ * with the code and verifying that the event's own coordinate hashes back to it (anti-spoof). Returns
+ * { pubkey, identifier, relays } (the newest verified revision) or null. npub authorities only.
+ */
+async function resolveShortHub(shortAddr) {
+  const parsed = parseShortAddress(shortAddr);
+  if (!parsed || !/^npub1/i.test(parsed.authority)) return null;
+  const pubkey = decodeNpub(parsed.authority);
+  if (!pubkey) return null;
+
+  const want = parsed.code + parsed.suffix;
+  const evs = await fetchEventsPooled(
+    { kinds: [36942], authors: [pubkey], '#s': [parsed.code] },
+    { relays: RELAYS, overallMs: 10000 },
+  );
+
+  let best = null;
+  for (const ev of evs) {
+    const dTag = ev.tags.find(t => t[0] === 'd')?.[1] || '';
+    const full = await computeFullHash(`a:36942:${pubkey}:${dTag}`);
+    if (!full.startsWith(want)) continue; // code (and selector, if any) must match the coordinate
+    if (!best || ev.created_at > best.created_at) best = ev;
+  }
+  if (!best) return null;
+
+  const dTag = best.tags.find(t => t[0] === 'd')?.[1] || '';
+  const relays = best.tags.filter(t => t[0] === 'r' && t[1]).map(t => t[1]);
+  return { pubkey, identifier: dTag, relays };
+}
+
 // ── Route Detection ──
 
 let creatorModalOpen = false;
@@ -1409,8 +1500,9 @@ function checkHubRoute() {
   const landing = document.getElementById('landing-content');
   if (!hubPage || !landing) return;
 
-  const match = hash.match(/^#hub\/(naddr1\S+)$/);
-  if (match) {
+  // Accept both an naddr and a NIP-SHORT address (`s…`) after #hub/.
+  const match = hash.match(/^#hub\/(\S+)$/);
+  if (match && (match[1].startsWith('naddr1') || looksLikeShortAddress(match[1]))) {
     landing.style.display = 'none';
     hubPage.classList.remove('hidden');
     window.scrollTo(0, 0);
@@ -1488,16 +1580,26 @@ async function loadHubPage(naddr) {
       </div>
     </div>`;
 
-  // Decode naddr
-  const decoded = decodeNaddr(naddr);
-  if (!decoded) {
-    renderHubError(container, 'Invalid hub address.', naddr);
-    return;
-  }
-
-  if (decoded.kind !== 36942) {
-    renderHubError(container, 'Invalid hub address — wrong event kind.', naddr);
-    return;
+  // Resolve the coordinate from either an naddr or a NIP-SHORT address.
+  let decoded;
+  let displayAddr = naddr; // what the app/web "open" links use (always a canonical naddr)
+  if (naddr.startsWith('naddr1')) {
+    decoded = decodeNaddr(naddr);
+    if (!decoded) { renderHubError(container, 'Invalid hub address.', naddr); return; }
+    if (decoded.kind !== 36942) { renderHubError(container, 'Invalid hub address — wrong event kind.', naddr); return; }
+  } else {
+    // NIP-SHORT: resolve the code to the hub's coordinate.
+    const parsed = parseShortAddress(naddr);
+    if (parsed && !/^npub1/i.test(parsed.authority)) {
+      renderHubError(container, 'This short link uses a DNN authority — open it in the DEN Chat app to resolve it.', naddr);
+      return;
+    }
+    decoded = await resolveShortHub(naddr);
+    if (!decoded) {
+      renderHubError(container, 'Hub not found for this short link. It may have been removed or the relays are unreachable.', naddr);
+      return;
+    }
+    displayAddr = encodeNaddr(decoded.pubkey, decoded.identifier, 36942, decoded.relays) || naddr;
   }
 
   // Fetch hub event + creator profile in parallel
@@ -1511,7 +1613,7 @@ async function loadHubPage(naddr) {
     return;
   }
 
-  renderHubPage(hub, creatorProfile, naddr);
+  renderHubPage(hub, creatorProfile, displayAddr);
 
   // Update page title
   document.title = hub.name + ' — DEN Chat Hub';
