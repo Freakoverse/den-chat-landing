@@ -45,20 +45,18 @@ const FREEDEN_NPUB = 'npub18ly7pqxzm4mmy8rd47cdt74ahc424y95xdtl9t7vek8777l5xqss3
 // on relays the landing doesn't read would be invisible here.
 const RELAYS = [
   'wss://relay.primal.net',
+  'wss://relay.damus.io',
   'wss://nos.lol',
-  'wss://relay.wellorder.net',
   'wss://nostr.mom',
-  'wss://nostrcheck.me',
   'wss://wheat.happytavern.co',
-  'wss://relay.0xchat.com',
   'wss://relay.snort.social',
   'wss://nostr.bitcoiner.social',
   'wss://relay.layer.systems',
-  'wss://relay.nostr.band',
-  'wss://nostr.novacisko.cz',
-  'wss://relay.cxplay.org',
-  'wss://relay.nostr.moe',
-  'wss://relay.poster.place',
+  'wss://nostr.oxtr.dev',
+  'wss://relay.ditto.pub',
+  'wss://relay.nostr.net',
+  'wss://offchain.pub',
+  'wss://nostr-01.yakihonne.com',
 ];
 
 // Mirrors the client's default Blossom servers. A hub's icon/banner URL points at ONE server
