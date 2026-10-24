@@ -584,32 +584,6 @@
     </div>
   </section>
 
-  <!-- ═══ Reality Check ═══ -->
-  <section id="reality-check" class="py-24 md:py-28 px-6">
-    <div class="max-w-6xl mx-auto text-center">
-      <h2 class="text-3xl md:text-4xl font-bold tracking-tight mb-3">Reality Check</h2>
-      <p class="text-[17px] text-den-muted-fg max-w-xl mx-auto mb-12 leading-relaxed">We believe in transparency. Here's
-        what you should know.</p>
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
-        <div class="bg-den-muted border border-den-border rounded-xl p-8 text-left">
-          <div class="font-semibold mb-3">Early Technology</div>
-          <p class="text-[15px] text-den-muted-fg leading-relaxed">This is new technology. DEN Chat is an experimental
-            implementation of a specification that is not yet standardized or widely tested. The app is in <strong
-              class="text-den-fg">alpha</strong>. Things will most likely break, features may not work as expected, and
-            data could be lost. There will be a learning curve, especially if you're new to decentralized systems.</p>
-        </div>
-        <div class="bg-den-muted border border-den-border rounded-xl p-8 text-left">
-          <div class="font-semibold mb-3">Freedom = Responsibility</div>
-          <p class="text-[15px] text-den-muted-fg leading-relaxed">With the highest freedom comes the highest
-            responsibility. <strong class="text-den-fg">You are in full control</strong>, including managing your own
-            security. Your seed phrase and private keys are yours alone. Losing or compromising them means <strong
-              class="text-den-fg">no possible recovery</strong>. No one can help you. There is no "forgot password"
-            button.</p>
-        </div>
-      </div>
-    </div>
-  </section>
-
   <!-- ═══ FAQ ═══ -->
   <section id="faq" class="bg-den-surface py-24 md:py-28 px-6">
     <div class="max-w-6xl mx-auto text-center">
@@ -1066,14 +1040,13 @@
             down, get acquired, or simply decide you're done, everything and everyone goes with them.</p>
         </div>
       </div>
-      <div class="mt-5 grid grid-cols-1 lg:grid-cols-[1fr_auto_1fr] gap-5 items-stretch text-left">
+      <div class="mt-5 grid grid-cols-1 lg:grid-cols-2 gap-5 items-stretch text-left">
         <div class="bg-den-muted border border-den-border rounded-xl p-6">
           <div class="font-semibold mb-2">Self-host? Ten accounts, ten logins.</div>
           <p class="text-[15px] text-den-muted-fg leading-relaxed">The usual escape hatch just moves the pain: a separate
             account, password and login for every server you join, logging in and out all day. And each instance still
             carries the same four problems above.</p>
         </div>
-        <div class="hidden lg:flex items-center justify-center text-den-muted-fg text-2xl" aria-hidden="true">&rarr;</div>
         <div class="bg-den-primary/10 border border-den-primary/30 rounded-xl p-6">
           <div class="text-xs font-semibold tracking-wide uppercase text-den-primary mb-2">The fix</div>
           <div class="font-bold text-lg mb-3">One identity you actually own.</div>
@@ -1127,10 +1100,11 @@
             whole castle.</p>
         </div>
         <div class="bg-den-muted border border-den-border rounded-xl p-6">
-          <div class="font-semibold mb-2">New tech, rough edges</div>
-          <p class="text-[15px] text-den-muted-fg leading-relaxed">This is young technology built on an open network. It
-            isn't always as fast or as robust as a polished centralized app, and it can use a fair amount of data at
-            times.</p>
+          <div class="font-semibold mb-2">Early, experimental tech</div>
+          <p class="text-[15px] text-den-muted-fg leading-relaxed">The app is in <strong class="text-den-fg">alpha</strong>,
+            an experimental build of a spec that isn't standardized or widely tested yet. Things will break, features may
+            misbehave, and data can be lost. It isn't always as fast or robust as a polished centralized app, and it can
+            use a fair amount of data at times.</p>
         </div>
         <div class="bg-den-muted border border-den-border rounded-xl p-6">
           <div class="font-semibold mb-2">Deletion is a request, not a guarantee</div>
@@ -1154,8 +1128,9 @@
           everyone. It's built for a specific kind of person, and it's honest about who it isn't for.</p>
       </div>
       <div class="grid grid-cols-1 md:grid-cols-2 gap-5 text-left">
-        <div class="bg-den-muted border border-green-500/20 rounded-xl p-8">
-          <div class="flex items-center gap-2 font-semibold text-lg mb-4"><span class="text-green-500">&#10003;</span> It's for you if</div>
+        <div class="bg-den-muted rounded-xl p-8">
+          <div class="text-xs font-semibold tracking-widest uppercase text-green-400 mb-2">A good fit</div>
+          <div class="font-semibold text-lg mb-5">It's for you if</div>
           <ul class="space-y-3 text-[15px] text-den-muted-fg leading-relaxed list-none">
             <li>You want what IRC, TeamSpeak, Discord and the rest offer, without the core problems baked into them.</li>
             <li>You're tired of walking on eggshells, wondering what gets you muted, banned, or erased next.</li>
@@ -1163,13 +1138,18 @@
             <li>You're tired of watching the same history repeat, and you want out, or you're already out.</li>
           </ul>
         </div>
-        <div class="bg-den-muted border border-red-500/20 rounded-xl p-8">
-          <div class="flex items-center gap-2 font-semibold text-lg mb-4"><span class="text-red-500">&#10007;</span> It's not for you if</div>
+        <div class="bg-den-muted rounded-xl p-8">
+          <div class="text-xs font-semibold tracking-widest uppercase text-red-400 mb-2">Not a fit</div>
+          <div class="font-semibold text-lg mb-5">It's not for you if</div>
           <ul class="space-y-3 text-[15px] text-den-muted-fg leading-relaxed list-none">
             <li>You can't carry the responsibility that comes with being in full control of yourself and your data.</li>
             <li>You couldn't live with losing or compromising your key, and starting again from near zero with a new one.</li>
             <li>You expect a company to step in and fix it for you when something goes wrong.</li>
           </ul>
+          <p class="text-[15px] text-den-muted-fg leading-relaxed mt-6">If that's you, that's completely fair, and DEN
+            Chat honestly isn't the right tool for you. You'll be better served by a traditional, company-run app like
+            Discord, Slack or Element, where that control is handed to someone else in exchange for a safety net. Use what
+            fits you, no hard feelings.</p>
         </div>
       </div>
       <p class="text-[15px] text-den-muted-fg max-w-3xl mx-auto mt-10 text-center leading-relaxed">DEN isn't chasing the
