@@ -1685,7 +1685,7 @@ function renderHubPage(hub, creatorProfile, naddr) {
 
   // Creator card
   const creatorAvatarHtml = creatorAvatar
-    ? `<div class="w-10 h-10 rounded-full bg-den-primary/20 flex items-center justify-center text-den-primary text-sm font-bold shrink-0" data-media-placeholder>${creatorName[0] || '?'}</div><img alt="${creatorName}" class="w-10 h-10 rounded-full object-cover shrink-0 hidden" data-media-real data-src="${creatorAvatar}" data-fallback="avatar" data-initials="${creatorName[0] || '?'}" onerror="blossomImgError(this)">`
+    ? `<div class="w-10 h-10 rounded-full bg-den-primary/20 flex items-center justify-center text-den-primary text-sm font-bold shrink-0" data-media-placeholder>${creatorName[0] || '?'}</div><img alt="${creatorName}" class="w-10 h-10 rounded-full object-cover shrink-0 hidden" data-media-real data-src="${creatorAvatar}" data-fallback="avatar" data-initials="${creatorName[0] || '?'}" data-alts='${JSON.stringify(blossomAlternates(creatorAvatar, hub.blossomServers)).replace(/'/g, '&#39;')}' onerror="blossomImgError(this)">`
     : `<div class="w-10 h-10 rounded-full bg-den-primary/20 flex items-center justify-center text-den-primary text-sm font-bold shrink-0">${creatorName[0] || '?'}</div>`;
 
   const hasGatedMedia = !!(hub.banner || hub.icon || creatorAvatar);
