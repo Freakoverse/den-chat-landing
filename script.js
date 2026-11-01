@@ -560,21 +560,27 @@ function releaseWs() {
 // received), after `perSocketMs`, or on error — freeing the slot for the next relay.
 // Resolves the deduped event list once every relay has settled or `overallMs` elapses.
 // Never rejects (an empty list is a valid result).
-function fetchEventsPooled(filter, { relays = RELAYS, perSocketMs = 3500, overallMs = 8000 } = {}) {
+function fetchEventsPooled(filter, { relays = RELAYS, perSocketMs = 3500, overallMs = 8000, earlyMs = 0 } = {}) {
   return new Promise((resolve) => {
     const events = new Map();
     let done = false;
     let settled = 0;
+    let earlyTimer = null;
     const openSockets = new Set();
 
     const finish = () => {
       if (done) return;
       done = true;
       clearTimeout(overall);
+      clearTimeout(earlyTimer);
       for (const ws of openSockets) { try { ws.close(); } catch { } }
       resolve([...events.values()]);
     };
     const overall = setTimeout(finish, overallMs);
+    // Once at least one match is in, don't keep waiting on the slowest/deadest relays: collect for a
+    // short grace window (long enough for others to surface a newer replaceable revision), then finish.
+    // When nothing matches, earlyTimer never arms, so a genuine "not found" still waits the full budget.
+    const armEarly = () => { if (earlyMs > 0 && earlyTimer === null && !done) earlyTimer = setTimeout(finish, earlyMs); };
     const settleOne = () => { if (++settled >= relays.length && !done) finish(); };
 
     for (const relay of relays) {
@@ -599,7 +605,7 @@ function fetchEventsPooled(filter, { relays = RELAYS, perSocketMs = 3500, overal
           ws.onmessage = (msg) => {
             try {
               const data = JSON.parse(msg.data);
-              if (data[0] === 'EVENT' && data[2]) events.set(data[2].id, data[2]);
+              if (data[0] === 'EVENT' && data[2]) { events.set(data[2].id, data[2]); armEarly(); }
               else if (data[0] === 'EOSE') release(); // all stored events received
             } catch { }
           };
@@ -1058,7 +1064,10 @@ function initAbout() {
 }
 
 function fetchProfile(pubkey) {
-  return fetchEventsPooled({ authors: [pubkey], kinds: [0], limit: 1 }).then(evs => {
+  // The creator profile is secondary (name/avatar) and the hub render waits on it, so cap it short. A
+  // v2 hub's author is the pseudonym O, which usually has no kind-0 at all: without a short budget that
+  // absent profile would never early-exit and would stall the whole page for the full relay timeout.
+  return fetchEventsPooled({ authors: [pubkey], kinds: [0], limit: 1 }, { overallMs: 3500, earlyMs: 1200 }).then(evs => {
     if (!evs.length) return null;
     const best = evs.reduce((a, b) => (b.created_at > a.created_at ? b : a));
     if (!best.content) return null;
@@ -1484,7 +1493,7 @@ async function resolveShortHub(shortAddr) {
   const want = parsed.code + parsed.suffix;
   const evs = await fetchEventsPooled(
     { kinds: [36942], authors: [pubkey], '#s': [parsed.code] },
-    { relays: RELAYS, overallMs: 10000 },
+    { relays: RELAYS, overallMs: 8000, earlyMs: 1200 },
   );
 
   let best = null;
@@ -1498,7 +1507,9 @@ async function resolveShortHub(shortAddr) {
 
   const dTag = best.tags.find(t => t[0] === 'd')?.[1] || '';
   const relays = best.tags.filter(t => t[0] === 'r' && t[1]).map(t => t[1]);
-  return { pubkey, identifier: dTag, relays };
+  // Hand back the resolved event itself: it IS the hub's kind-36942 event, so the caller can render
+  // from it directly instead of fetching the same event a second time by coordinate.
+  return { pubkey, identifier: dTag, relays, event: best };
 }
 
 // ── Route Detection ──
@@ -1534,39 +1545,44 @@ function checkHubRoute() {
 
 // ── Hub Event Fetching ──
 
+// Build the display hub object from a kind-36942 event (v1 keeps the public face in content.settings;
+// v2 encrypts content and publishes the public face as plaintext tags).
+function buildHubFromEvent(bestEvent) {
+  const getTag = (name) => bestEvent.tags.find(t => t[0] === name)?.[1] || '';
+  const getTags = (name) => bestEvent.tags.filter(t => t[0] === name).map(t => t[1]);
+
+  let settings = {};
+  try { settings = JSON.parse(bestEvent.content) || {}; } catch { }
+
+  return {
+    name: getTag('n') || getTag('name') || 'Unnamed Hub',
+    tags: getTags('t'),
+    minPow: parseInt(getTag('w')) || 0,
+    epoch: getTag('epoch') || '',
+    nsfw: bestEvent.tags.some(t => t[0] === 'content-warning'),
+    discoverable: getTag('f') || '',
+    publishedAt: parseInt(getTag('published_at')) || bestEvent.created_at,
+    description: getTag('about') || settings.description || (typeof settings.settings === 'object' ? settings.settings.description : '') || '',
+    icon: getTag('picture') || settings.icon || (typeof settings.settings === 'object' ? settings.settings.icon : '') || '',
+    banner: getTag('banner') || settings.banner || (typeof settings.settings === 'object' ? settings.settings.banner : '') || '',
+    blossomServers: getTags('o'),
+    version: parseInt(getTag('version')) || 1,
+    channels: Array.isArray(settings.channels) ? settings.channels : [],
+    roles: Array.isArray(settings.roles) ? settings.roles : [],
+    categories: Array.isArray(settings.categories) ? settings.categories : [],
+    creatorPubkey: bestEvent.pubkey,
+    dTag: getTag('d'),
+  };
+}
+
 function fetchHubEvent(pubkey, dTag, relayHints) {
-  // Hub-declared relays first (most likely to hold the event), then defaults.
+  // Hub-declared relays first (most likely to hold the event), then defaults. Return as soon as a copy
+  // is in hand (earlyMs) rather than waiting out the slowest relay.
   const relays = [...new Set([...(relayHints || []), ...RELAYS])];
-  return fetchEventsPooled({ kinds: [36942], authors: [pubkey], '#d': [dTag] }, { relays, overallMs: 10000 }).then(evs => {
+  return fetchEventsPooled({ kinds: [36942], authors: [pubkey], '#d': [dTag] }, { relays, overallMs: 8000, earlyMs: 1200 }).then(evs => {
     if (!evs.length) return null;
     const bestEvent = evs.reduce((a, b) => (b.created_at > a.created_at ? b : a));
-
-    const getTag = (name) => bestEvent.tags.find(t => t[0] === name)?.[1] || '';
-    const getTags = (name) => bestEvent.tags.filter(t => t[0] === name).map(t => t[1]);
-
-    let settings = {};
-    try { settings = JSON.parse(bestEvent.content) || {}; } catch { }
-
-    return {
-      name: getTag('n') || getTag('name') || 'Unnamed Hub',
-      tags: getTags('t'),
-      minPow: parseInt(getTag('w')) || 0,
-      epoch: getTag('epoch') || '',
-      nsfw: bestEvent.tags.some(t => t[0] === 'content-warning'),
-      discoverable: getTag('f') || '',
-      publishedAt: parseInt(getTag('published_at')) || bestEvent.created_at,
-      // v2 hubs (encrypted content) publish the public face as plaintext tags; v1 keeps it in content.settings.
-      description: getTag('about') || settings.description || (typeof settings.settings === 'object' ? settings.settings.description : '') || '',
-      icon: getTag('picture') || settings.icon || (typeof settings.settings === 'object' ? settings.settings.icon : '') || '',
-      banner: getTag('banner') || settings.banner || (typeof settings.settings === 'object' ? settings.settings.banner : '') || '',
-      blossomServers: getTags('o'),
-      version: parseInt(getTag('version')) || 1,
-      channels: Array.isArray(settings.channels) ? settings.channels : [],
-      roles: Array.isArray(settings.roles) ? settings.roles : [],
-      categories: Array.isArray(settings.categories) ? settings.categories : [],
-      creatorPubkey: bestEvent.pubkey,
-      dTag: getTag('d'),
-    };
+    return buildHubFromEvent(bestEvent);
   });
 }
 
@@ -1620,9 +1636,10 @@ async function loadHubPage(naddr) {
     displayAddr = encodeNaddr(decoded.pubkey, decoded.identifier, 36942, decoded.relays) || naddr;
   }
 
-  // Fetch hub event + creator profile in parallel
+  // Fetch hub event + creator profile in parallel. A short-address resolve already fetched the hub's
+  // kind-36942 event, so reuse it instead of fetching the same event again by coordinate.
   const [hub, creatorProfile] = await Promise.all([
-    fetchHubEvent(decoded.pubkey, decoded.identifier, decoded.relays),
+    decoded.event ? Promise.resolve(buildHubFromEvent(decoded.event)) : fetchHubEvent(decoded.pubkey, decoded.identifier, decoded.relays),
     fetchProfile(decoded.pubkey),
   ]);
 
