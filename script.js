@@ -560,7 +560,9 @@ function releaseWs() {
 // received), after `perSocketMs`, or on error — freeing the slot for the next relay.
 // Resolves the deduped event list once every relay has settled or `overallMs` elapses.
 // Never rejects (an empty list is a valid result).
-function fetchEventsPooled(filter, { relays = RELAYS, perSocketMs = 3500, overallMs = 8000, earlyMs = 0 } = {}) {
+// `onEvent(ev)` (optional) is called once per newly-seen event as it streams in, so a caller can render
+// progressively and keep updating as later/slower relays answer, instead of waiting for the final list.
+function fetchEventsPooled(filter, { relays = RELAYS, perSocketMs = 3500, overallMs = 8000, earlyMs = 0, onEvent = null } = {}) {
   return new Promise((resolve) => {
     const events = new Map();
     let done = false;
@@ -605,7 +607,14 @@ function fetchEventsPooled(filter, { relays = RELAYS, perSocketMs = 3500, overal
           ws.onmessage = (msg) => {
             try {
               const data = JSON.parse(msg.data);
-              if (data[0] === 'EVENT' && data[2]) { events.set(data[2].id, data[2]); armEarly(); }
+              if (data[0] === 'EVENT' && data[2]) {
+                const ev = data[2];
+                if (!events.has(ev.id)) events.set(ev.id, ev);
+                // Call onEvent for every delivery (even a duplicate from another relay) so the caller can
+                // cut THIS relay's socket once it has what it needs; `release` closes just this socket.
+                if (onEvent) { try { onEvent(ev, release); } catch { } }
+                armEarly();
+              }
               else if (data[0] === 'EOSE') release(); // all stored events received
             } catch { }
           };
@@ -1480,40 +1489,50 @@ async function computeFullHash(canonicalInput) {
 }
 
 /**
- * Resolve a hub short address to its coordinate by fetching the author's kind-36942 events tagged
- * with the code and verifying that the event's own coordinate hashes back to it (anti-spoof). Returns
- * { pubkey, identifier, relays } (the newest verified revision) or null. key36 and npub authorities.
+ * Live hub load. Streams the author's kind-36942 event(s) and calls onHub(event, naddrForEvent) each
+ * time a NEWER matching revision arrives, so the page can render on the first copy and upgrade in place
+ * when a later/slower relay answers. Resolves to the best event seen (or null) once the whole search
+ * finishes, so the caller only shows "not found" after a full search, never on an early miss.
+ *   - naddr target ({ pubkey, dTag }): exact-coordinate match via `#d`.
+ *   - short target ({ pubkey, code, want }): `#s` code filter, verifying each event's coordinate hashes
+ *     back to code(+selector) so a spoofed `s` tag can't impersonate the hub.
+ * There is no earlyMs: we render on the first event anyway, so each relay stays open only until IT has
+ * answered (its socket is cut the moment it delivers the hub, see below) rather than for a fixed window;
+ * the generous perSocketMs/overallMs only bound dead relays and the final not-found verdict, which is
+ * exactly when patience is wanted.
  */
-async function resolveShortHub(shortAddr) {
-  const parsed = parseShortAddress(shortAddr);
-  if (!parsed) return null;
-  const pubkey = authorityToPubkey(parsed.authority);
-  if (!pubkey) return null;
-
-  const want = parsed.code + parsed.suffix;
-  // earlyMs keeps success fast (finish ~1.5s after the first copy lands); the generous perSocketMs/
-  // overallMs only come into play when the hub is slow to surface or truly absent, which is exactly
-  // when we want to be patient rather than falsely report "not found". The hub often lives on just one
-  // or two relays that can be slow or in the second concurrency wave.
-  const evs = await fetchEventsPooled(
-    { kinds: [36942], authors: [pubkey], '#s': [parsed.code] },
-    { relays: RELAYS, perSocketMs: 6000, overallMs: 12000, earlyMs: 1500 },
-  );
+function streamHubEvent(target, onHub) {
+  const isShort = target.want != null;
+  const relays = target.relayHints ? [...new Set([...target.relayHints, ...RELAYS])] : RELAYS;
+  const filter = isShort
+    ? { kinds: [36942], authors: [target.pubkey], '#s': [target.code] }
+    : { kinds: [36942], authors: [target.pubkey], '#d': [target.dTag] };
 
   let best = null;
-  for (const ev of evs) {
-    const dTag = ev.tags.find(t => t[0] === 'd')?.[1] || '';
-    const full = await computeFullHash(`a:36942:${pubkey}:${dTag}`);
-    if (!full.startsWith(want)) continue; // code (and selector, if any) must match the coordinate
-    if (!best || ev.created_at > best.created_at) best = ev;
-  }
-  if (!best) return null;
+  const pending = [];
 
-  const dTag = best.tags.find(t => t[0] === 'd')?.[1] || '';
-  const relays = best.tags.filter(t => t[0] === 'r' && t[1]).map(t => t[1]);
-  // Hand back the resolved event itself: it IS the hub's kind-36942 event, so the caller can render
-  // from it directly instead of fetching the same event a second time by coordinate.
-  return { pubkey, identifier: dTag, relays, event: best };
+  const consider = async (ev, release) => {
+    if (ev.pubkey !== target.pubkey) return;
+    const dTag = ev.tags.find(t => t[0] === 'd')?.[1] || '';
+    if (isShort) {
+      const full = await computeFullHash(`a:36942:${target.pubkey}:${dTag}`);
+      if (!full.startsWith(target.want)) return; // code (+selector) must match the coordinate
+    } else if (dTag !== target.dTag) {
+      return;
+    }
+    // This relay has delivered the hub. A replaceable/addressable event is stored newest-only per relay,
+    // so there is nothing more to get from it: cut its socket now instead of holding a live connection.
+    if (release) release();
+    if (best && ev.created_at <= best.created_at) return; // keep the newest revision across relays
+    best = ev;
+    const relayHints = ev.tags.filter(t => t[0] === 'r' && t[1]).map(t => t[1]);
+    onHub(ev, encodeNaddr(target.pubkey, dTag, 36942, relayHints));
+  };
+
+  return fetchEventsPooled(filter, {
+    relays, perSocketMs: 6000, overallMs: 12000,
+    onEvent: (ev, release) => { pending.push(consider(ev, release)); },
+  }).then(async () => { await Promise.allSettled(pending); return best; });
 }
 
 // ── Route Detection ──
@@ -1579,17 +1598,6 @@ function buildHubFromEvent(bestEvent) {
   };
 }
 
-function fetchHubEvent(pubkey, dTag, relayHints) {
-  // Hub-declared relays first (most likely to hold the event), then defaults. Return as soon as a copy
-  // is in hand (earlyMs) rather than waiting out the slowest relay.
-  const relays = [...new Set([...(relayHints || []), ...RELAYS])];
-  return fetchEventsPooled({ kinds: [36942], authors: [pubkey], '#d': [dTag] }, { relays, perSocketMs: 6000, overallMs: 12000, earlyMs: 1500 }).then(evs => {
-    if (!evs.length) return null;
-    const bestEvent = evs.reduce((a, b) => (b.created_at > a.created_at ? b : a));
-    return buildHubFromEvent(bestEvent);
-  });
-}
-
 // ── Hub Page Loading ──
 
 async function loadHubPage(naddr) {
@@ -1618,44 +1626,64 @@ async function loadHubPage(naddr) {
       </div>
     </div>`;
 
-  // Resolve the coordinate from either an naddr or a NIP-SHORT address.
-  let decoded;
-  let displayAddr = naddr; // what the app/web "open" links use (always a canonical naddr)
-  if (naddr.startsWith('naddr1')) {
-    decoded = decodeNaddr(naddr);
+  // Invalidate any in-flight load when a newer one starts (user navigated to another hub/route), so a
+  // late event from the previous stream can never render over the current page.
+  const loadToken = (window.__hubLoadToken = (window.__hubLoadToken || 0) + 1);
+  const isStale = () => window.__hubLoadToken !== loadToken;
+
+  // Work out the author + how to match the hub event, from either an naddr or a NIP-SHORT address.
+  const isNaddr = naddr.startsWith('naddr1');
+  let target;
+  if (isNaddr) {
+    const decoded = decodeNaddr(naddr);
     if (!decoded) { renderHubError(container, 'Invalid hub address.', naddr); return; }
     if (decoded.kind !== 36942) { renderHubError(container, 'Invalid hub address — wrong event kind.', naddr); return; }
+    target = { pubkey: decoded.pubkey, dTag: decoded.identifier, relayHints: decoded.relays || [] };
   } else {
-    // NIP-SHORT: resolve the code to the hub's coordinate.
     const parsed = parseShortAddress(naddr);
-    if (parsed && !authorityToPubkey(parsed.authority)) {
-      renderHubError(container, 'This short link uses a DNN authority — open it in the DEN Chat app to resolve it.', naddr);
+    const pubkey = parsed && authorityToPubkey(parsed.authority);
+    if (!pubkey) {
+      renderHubError(container, parsed
+        ? 'This short link uses a DNN authority — open it in the DEN Chat app to resolve it.'
+        : 'Invalid hub short address.', naddr);
       return;
     }
-    decoded = await resolveShortHub(naddr);
-    if (!decoded) {
-      renderHubError(container, 'Hub not found for this short link. It may have been removed or the relays are unreachable.', naddr);
-      return;
-    }
-    displayAddr = encodeNaddr(decoded.pubkey, decoded.identifier, 36942, decoded.relays) || naddr;
+    target = { pubkey, code: parsed.code, want: parsed.code + parsed.suffix };
   }
 
-  // Fetch hub event + creator profile in parallel. A short-address resolve already fetched the hub's
-  // kind-36942 event, so reuse it instead of fetching the same event again by coordinate.
-  const [hub, creatorProfile] = await Promise.all([
-    decoded.event ? Promise.resolve(buildHubFromEvent(decoded.event)) : fetchHubEvent(decoded.pubkey, decoded.identifier, decoded.relays),
-    fetchProfile(decoded.pubkey),
-  ]);
+  // Progressive render: show the hub on the first matching event, upgrade in place if a newer revision
+  // or the (background) creator profile arrives, and hold the not-found error until the whole search ends.
+  let hubEvent = null, displayAddr = naddr, profile = null, rendered = false;
 
-  if (!hub) {
-    renderHubError(container, 'Hub not found. It may have been removed or the relays are unreachable.', naddr);
-    return;
-  }
+  const render = () => {
+    if (isStale() || !hubEvent) return;
+    const hub = buildHubFromEvent(hubEvent);
+    renderHubPage(hub, profile, displayAddr);
+    document.title = hub.name + ' — DEN Chat Hub';
+    rendered = true;
+  };
 
-  renderHubPage(hub, creatorProfile, displayAddr);
+  // Creator profile runs in parallel and only enhances the page (name/avatar); never let it block or
+  // delay the hub render. Patch it in when it lands, unless the user already revealed gated media (a full
+  // re-render would re-hide it) in which case we leave the card as the npub short form.
+  fetchProfile(target.pubkey).then((p) => {
+    if (isStale() || !p) return;
+    profile = p;
+    if (rendered && container.dataset.mediaRevealed !== 'true') render();
+  });
 
-  // Update page title
-  document.title = hub.name + ' — DEN Chat Hub';
+  const best = await streamHubEvent(target, (ev, naddrForEvent) => {
+    if (isStale()) return;
+    hubEvent = ev;
+    if (!isNaddr && naddrForEvent) displayAddr = naddrForEvent;
+    render();
+  });
+
+  // The whole search has finished. Only now, if nothing ever matched, show the not-found error.
+  if (isStale() || best) return;
+  renderHubError(container, isNaddr
+    ? 'Hub not found. It may have been removed or the relays are unreachable.'
+    : 'Hub not found for this short link. It may have been removed or the relays are unreachable.', naddr);
 }
 
 function renderHubError(container, message, naddr) {
