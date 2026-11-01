@@ -1491,9 +1491,13 @@ async function resolveShortHub(shortAddr) {
   if (!pubkey) return null;
 
   const want = parsed.code + parsed.suffix;
+  // earlyMs keeps success fast (finish ~1.5s after the first copy lands); the generous perSocketMs/
+  // overallMs only come into play when the hub is slow to surface or truly absent, which is exactly
+  // when we want to be patient rather than falsely report "not found". The hub often lives on just one
+  // or two relays that can be slow or in the second concurrency wave.
   const evs = await fetchEventsPooled(
     { kinds: [36942], authors: [pubkey], '#s': [parsed.code] },
-    { relays: RELAYS, overallMs: 8000, earlyMs: 1200 },
+    { relays: RELAYS, perSocketMs: 6000, overallMs: 12000, earlyMs: 1500 },
   );
 
   let best = null;
@@ -1579,7 +1583,7 @@ function fetchHubEvent(pubkey, dTag, relayHints) {
   // Hub-declared relays first (most likely to hold the event), then defaults. Return as soon as a copy
   // is in hand (earlyMs) rather than waiting out the slowest relay.
   const relays = [...new Set([...(relayHints || []), ...RELAYS])];
-  return fetchEventsPooled({ kinds: [36942], authors: [pubkey], '#d': [dTag] }, { relays, overallMs: 8000, earlyMs: 1200 }).then(evs => {
+  return fetchEventsPooled({ kinds: [36942], authors: [pubkey], '#d': [dTag] }, { relays, perSocketMs: 6000, overallMs: 12000, earlyMs: 1500 }).then(evs => {
     if (!evs.length) return null;
     const bestEvent = evs.reduce((a, b) => (b.created_at > a.created_at ? b : a));
     return buildHubFromEvent(bestEvent);
