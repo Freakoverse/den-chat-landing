@@ -1392,10 +1392,13 @@ function hexToNpub(hex) {
 
 // ── NIP-SHORT hub address resolution ──
 // A hub can be shared as a short address `s<authority><code>` (see NIP-SHORT). `authority` is the
-// author's npub (or a DNN id, which needs the app to resolve); `code` is the first 6 hex of SHA-256
-// over the coordinate `a:36942:<pubkey>:<d>`, so it is stable across hub edits and relay-indexed as `#s`.
+// author as key36 (the pubkey in base 36, 50 chars — the NIP-SHORT canonical form), a legacy npub
+// (what the client used to emit), or a DNN id (which needs the app to resolve). `code` is the first
+// 6 hex of SHA-256 over the coordinate `a:36942:<pubkey>:<d>`, stable across hub edits and relay-
+// indexed as `#s`. key36 and npub decode here with no network; DNN is deferred to the app.
 
 const SHORT_CODE_RE = /^[0-9a-f]{6}$/;
+const KEY36_RE = /^[0-9a-z]{50}$/;
 
 /** Decode an npub to a 32-byte hex pubkey (null if invalid). */
 function decodeNpub(npub) {
@@ -1404,6 +1407,22 @@ function decodeNpub(npub) {
   const bytes = convertBits(d.words, 5, 8, false);
   if (!bytes || bytes.length !== 32) return null;
   return Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+/** Decode a key36 (50 base-36 chars) to a 64-hex pubkey, or null if invalid (charset, or value ≥ 2²⁵⁶). */
+function fromKey36(key36) {
+  const k = String(key36).toLowerCase();
+  if (!KEY36_RE.test(k)) return null;
+  let n = 0n;
+  for (const c of k) n = n * 36n + BigInt(parseInt(c, 36));
+  if (n >= 1n << 256n) return null;
+  return n.toString(16).padStart(64, '0');
+}
+
+/** Resolve a short-address authority to a hex pubkey with no network: key36 or legacy npub (null for a DNN id). */
+function authorityToPubkey(authority) {
+  if (/^npub1/i.test(authority)) return decodeNpub(authority);
+  return fromKey36(authority);
 }
 
 /** Encode a coordinate as an naddr (NIP-19), so the resolved hub's app/web links use a canonical address. */
@@ -1436,12 +1455,13 @@ function parseShortAddress(input) {
   return { authority, code, suffix };
 }
 
-/** True for an `s…` string that is a well-formed short address (not a bare word or npub). */
+/** True for an `s…` string that is a well-formed short address (not a bare word, npub, or key36). */
 function looksLikeShortAddress(input) {
   const p = parseShortAddress(input);
   if (!p) return false;
-  // Only npub authorities can be resolved here; a DNN authority resolves in the app.
-  return /^npub1/i.test(p.authority) && !!decodeNpub(p.authority);
+  // key36 and legacy npub authorities decode here; a DNN authority can't (it resolves in the app),
+  // so a DNN short link won't be treated as a hub route on the landing page.
+  return !!authorityToPubkey(p.authority);
 }
 
 /** Full SHA-256 hex over the canonical input (code = first 6 chars; selectors continue from there). */
@@ -1453,12 +1473,12 @@ async function computeFullHash(canonicalInput) {
 /**
  * Resolve a hub short address to its coordinate by fetching the author's kind-36942 events tagged
  * with the code and verifying that the event's own coordinate hashes back to it (anti-spoof). Returns
- * { pubkey, identifier, relays } (the newest verified revision) or null. npub authorities only.
+ * { pubkey, identifier, relays } (the newest verified revision) or null. key36 and npub authorities.
  */
 async function resolveShortHub(shortAddr) {
   const parsed = parseShortAddress(shortAddr);
-  if (!parsed || !/^npub1/i.test(parsed.authority)) return null;
-  const pubkey = decodeNpub(parsed.authority);
+  if (!parsed) return null;
+  const pubkey = authorityToPubkey(parsed.authority);
   if (!pubkey) return null;
 
   const want = parsed.code + parsed.suffix;
@@ -1588,7 +1608,7 @@ async function loadHubPage(naddr) {
   } else {
     // NIP-SHORT: resolve the code to the hub's coordinate.
     const parsed = parseShortAddress(naddr);
-    if (parsed && !/^npub1/i.test(parsed.authority)) {
+    if (parsed && !authorityToPubkey(parsed.authority)) {
       renderHubError(container, 'This short link uses a DNN authority — open it in the DEN Chat app to resolve it.', naddr);
       return;
     }
