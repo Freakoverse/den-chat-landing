@@ -1133,12 +1133,13 @@
               <h3 class="text-lg font-semibold text-den-fg mb-1.5">What should a user actually pick?</h3>
               <p class="text-[15px] text-den-muted-fg leading-relaxed mb-5">The answer flips entirely on the lens, so there are three answers.</p>
             </div>
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-left">
+            <div class="space-y-4 text-left">
               <div class="bg-den-muted border border-den-border rounded-xl p-5">
                 <div class="text-xs font-semibold uppercase tracking-wide text-den-muted-fg mb-1.5">IRC / TeamSpeak / Discord refugee</div>
                 <div class="text-base font-bold text-den-fg mb-2">NIP-CHAT</div>
                 <p class="text-[14px] text-den-muted-fg leading-relaxed">For someone escaping a corporate host but not defending against a nation-state, NIP-CHAT clears every core problem (no central owner, E2E content, no trusted server, portable identity) while being the only option that <strong class="text-den-fg">also</strong> scales a large public community cheaply (O(log N) removal), supports discovery, and keeps full history. Its one concession, a stable public routing surface, is exactly what this user does not care about.</p>
               </div>
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div class="bg-den-muted border border-den-border rounded-xl p-5">
                 <div class="text-xs font-semibold uppercase tracking-wide text-den-muted-fg mb-1.5">Snowden-grade / high-threat</div>
                 <div class="text-base font-bold text-den-fg mb-2">Marmot (or CORDN)</div>
@@ -1148,6 +1149,7 @@
                 <div class="text-xs font-semibold uppercase tracking-wide text-den-muted-fg mb-1.5">Max metadata privacy, no ratchet needed</div>
                 <div class="text-base font-bold text-den-fg mb-2">Concord</div>
                 <p class="text-[14px] text-den-muted-fg leading-relaxed">For a small-to-moderate, low-churn community that wants its existence, structure and membership hard for the public to see, and is not defending against device seizure. It is the one option that hides even the community name and channel structure, rotates pseudonymous addresses a relay cannot pin, and trusts no server at all. The cost: expensive removals as it grows, and no public discovery.</p>
+              </div>
               </div>
             </div>
             <div class="bg-den-primary/10 border border-den-primary/30 rounded-xl p-5">
