@@ -958,7 +958,7 @@
           <div class="border-t border-den-border px-5 sm:px-6 py-7 space-y-9">
 
             <!-- The one idea -->
-            <div class="max-w-3xl">
+            <div>
               <h3 class="text-lg font-semibold text-den-fg mb-2">The one idea behind the whole table</h3>
               <p class="text-[15px] text-den-muted-fg leading-relaxed mb-4">These rows are <strong class="text-den-fg">not independent scores</strong>. Each protocol is one coherent choice about <em class="text-den-fg not-italic font-medium">where authority and addressing live</em>, and every row falls out of that choice:</p>
               <ul class="space-y-2 text-[15px] text-den-muted-fg leading-relaxed mb-4">
@@ -972,7 +972,7 @@
             </div>
 
             <!-- The lens -->
-            <div class="max-w-3xl bg-den-muted border border-den-border rounded-xl p-5 sm:p-6">
+            <div class="bg-den-muted border border-den-border rounded-xl p-5 sm:p-6">
               <h3 class="text-base font-semibold text-den-fg mb-2">The lens this is judged through</h3>
               <p class="text-[15px] text-den-muted-fg leading-relaxed mb-3">Criteria are weighted for a target audience coming off IRC, TeamSpeak or Discord who want out of those platforms' core problems: a central owner that holds, reads or sells their data; deplatforming at the host's whim; a host that can be subpoenaed, hacked or shut down (taking the community with it); surveillance of their own chat; and lock-in with no portability.</p>
               <p class="text-[15px] text-den-muted-fg leading-relaxed">It is <strong class="text-den-fg">not</strong> judged for a hardcore-privacy-advocate or nation-state threat model. So "good enough to escape a corporate host and its moderation" scores green even if a global traffic-analyst could still learn something. Every protocol here except NIP-29 resists relay censorship to some degree; the differences are of degree, not a property only one design has.</p>
@@ -1129,7 +1129,7 @@
             <p class="text-xs text-den-muted-fg/60 leading-relaxed">Read some rows as values, not scores. Full history (NIP-CHAT) versus no pre-join history (Marmot, CORDN) is a priority split, not a win. Privacy is three rows, not one: Concord wins metadata privacy, the MLS pair wins both secrecy rows. All five columns are spec-audited against the protocols' own documents.</p>
 
             <!-- Conclusion: the three lenses -->
-            <div class="max-w-3xl pt-2">
+            <div class="pt-2">
               <h3 class="text-lg font-semibold text-den-fg mb-1.5">What should a user actually pick?</h3>
               <p class="text-[15px] text-den-muted-fg leading-relaxed mb-5">The answer flips entirely on the lens, so there are three answers.</p>
             </div>
@@ -1150,7 +1150,7 @@
                 <p class="text-[14px] text-den-muted-fg leading-relaxed">For a small-to-moderate, low-churn community that wants its existence, structure and membership hard for the public to see, and is not defending against device seizure. It is the one option that hides even the community name and channel structure, rotates pseudonymous addresses a relay cannot pin, and trusts no server at all. The cost: expensive removals as it grows, and no public discovery.</p>
               </div>
             </div>
-            <div class="max-w-3xl bg-den-primary/10 border border-den-primary/30 rounded-xl p-5">
+            <div class="bg-den-primary/10 border border-den-primary/30 rounded-xl p-5">
               <p class="text-[14px] text-den-fg leading-relaxed"><strong>In one line:</strong> a scalable, discoverable, solidly private, censorship-resistant community goes to <strong>NIP-CHAT</strong>; a metadata-private, strongly censorship-resistant, low-to-medium-scale community that does not need ratchet-grade secrecy goes to <strong>Concord</strong>; protect-against-a-state goes to <strong>Marmot</strong> (or <strong>CORDN</strong> if metadata-hiding matters most). NIP-29 is never the privacy answer: it reintroduces the trusted central host the whole exercise is trying to escape.</p>
             </div>
 
