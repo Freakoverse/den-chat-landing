@@ -962,11 +962,11 @@
               <h3 class="text-lg font-semibold text-den-fg mb-2">The one idea behind the whole table</h3>
               <p class="text-[15px] text-den-muted-fg leading-relaxed mb-4">These rows are <strong class="text-den-fg">not independent scores</strong>. Each protocol is one coherent choice about <em class="text-den-fg not-italic font-medium">where authority and addressing live</em>, and every row falls out of that choice:</p>
               <ul class="space-y-2 text-[15px] text-den-muted-fg leading-relaxed mb-4">
+                <li><strong class="text-den-fg">NIP-CHAT:</strong> in a public identifier plus a stored key tree (best scaling and discovery, weaker metadata privacy).</li>
                 <li><strong class="text-den-fg">NIP-29:</strong> authority and addressing live in a managed relay (simple, scalable, not private, weak on censorship-resistance).</li>
                 <li><strong class="text-den-fg">Marmot:</strong> in an MLS ratchet (best content secrecy, no pre-join history, heaviest).</li>
-                <li><strong class="text-den-fg">Concord:</strong> in secret rotating derived keys (strongest metadata privacy, high censorship-resistance, worst removal cost).</li>
-                <li><strong class="text-den-fg">NIP-CHAT:</strong> in a public identifier plus a stored key tree (best scaling and discovery, weaker metadata privacy).</li>
                 <li><strong class="text-den-fg">CORDN:</strong> in an MLS group plus a per-group coordinator (Marmot's crypto, but delivery through one self-hostable coordinator per group).</li>
+                <li><strong class="text-den-fg">Concord:</strong> in secret rotating derived keys (strongest metadata privacy, high censorship-resistance, worst removal cost).</li>
               </ul>
               <p class="text-[15px] text-den-muted-fg leading-relaxed">Nobody wins. Each is Pareto-optimal for a different priority. Marmot and CORDN share the same MLS core; they differ mainly in transport and trust (Marmot over open relays, CORDN over a per-group coordinator).</p>
             </div>
