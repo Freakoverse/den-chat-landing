@@ -1056,7 +1056,7 @@
                       <td class="border-r border-b border-black bg-[#ab3f38] text-white px-2.5 py-2.5 align-top text-left text-[12px] leading-snug min-w-[190px] w-[190px]">One trusted or self-hosted managed relay.</td>
                       <td class="border-r border-b border-black bg-[#007f61] text-white px-2.5 py-2.5 align-top text-left text-[12px] leading-snug min-w-[190px] w-[190px]">Nostr relays only, with redundant delivery a MUST; optional Blossom for encrypted media.</td>
                       <td class="border-r border-b border-black bg-[#bf7e31] text-white px-2.5 py-2.5 align-top text-left text-[12px] leading-snug min-w-[190px] w-[190px]">A per-group coordinator (MLS state plus ordering) over ContextVM; self-hostable and movable, even in a browser tab.</td>
-                      <td class="border-r border-b border-black bg-[#007f61] text-white px-2.5 py-2.5 align-top text-left text-[12px] leading-snug min-w-[190px] w-[190px]">Nostr relays only.</td>
+                      <td class="border-r border-b border-black bg-[#007f61] text-white px-2.5 py-2.5 align-top text-left text-[12px] leading-snug min-w-[190px] w-[190px]">Nostr relays only, with redundant delivery a MUST; optional Blossom for encrypted media.</td>
                     </tr>
                     <tr>
                       <th scope="row" class="sticky left-0 z-20 border-r border-b border-black bg-den-muted w-[150px] min-w-[150px] sm:w-[220px] sm:min-w-[220px] px-3 py-2.5 text-left align-top text-[12px] sm:text-[13px] font-medium leading-snug text-den-fg">History for new members</th>
@@ -1072,7 +1072,7 @@
                       <td class="border-r border-b border-black bg-[#007f61] text-white px-2.5 py-2.5 align-top text-left text-[12px] leading-snug min-w-[190px] w-[190px]"><strong>Relay moderates</strong> (server-side).</td>
                       <td class="border-r border-b border-black bg-[#007f61] text-white px-2.5 py-2.5 align-top text-left text-[12px] leading-snug min-w-[190px] w-[190px]"><strong>Cryptographic.</strong> A non-member envelope fails the MLS/AEAD check and is dropped.</td>
                       <td class="border-r border-b border-black bg-[#007f61] text-white px-2.5 py-2.5 align-top text-left text-[12px] leading-snug min-w-[190px] w-[190px]"><strong>MLS membership</strong> plus the coordinator gates who can deliver.</td>
-                      <td class="border-r border-b border-black bg-[#bf7e31] text-white px-2.5 py-2.5 align-top text-left text-[12px] leading-snug min-w-[190px] w-[190px]"><strong>Structural.</strong> Outsiders cannot author at the group address, but there is no roster to verify against.</td>
+                      <td class="border-r border-b border-black bg-[#007f61] text-white px-2.5 py-2.5 align-top text-left text-[12px] leading-snug min-w-[190px] w-[190px]"><strong>Structural, and close to free.</strong> Authorship is intrinsic to every message (signed in-wrap, checkable against the roster), so spam-gating needs no separate reputation or PoW layer.</td>
                     </tr>
                     <tr>
                       <th scope="row" class="sticky left-0 z-20 border-r border-b border-black bg-den-muted w-[150px] min-w-[150px] sm:w-[220px] sm:min-w-[220px] px-3 py-2.5 text-left align-top text-[12px] sm:text-[13px] font-medium leading-snug text-den-fg">Trust model</th>
